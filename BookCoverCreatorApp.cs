@@ -68,11 +68,11 @@ namespace BookCoverCreator
             string backCoverFile = Path.Combine(inputFolder, backCoverFileName);
             string spineFile = Path.Combine(inputFolder, spineFileName);
             string frontCoverFile = Path.Combine(inputFolder, frontCoverFileName);
-            string backCoverFileResized = Path.Combine(outputFolder, "BackCover.png");
-            string backCoverFileMirrored = Path.Combine(outputFolder, "BackCoverMirrored.png");
-            string spineFileFaded = Path.Combine(outputFolder, "SpineBlend.png");
-            string frontCoverResized = Path.Combine(outputFolder, "FrontCover.png");
-            string frontCoverFileMirrored = Path.Combine(outputFolder, "FrontCoverMirrored.png");
+            string backCoverFileResized = Path.Combine(outputFolder, "04-BackCover.png");
+            string backCoverFileMirrored = Path.Combine(outputFolder, "02-BackCoverMirrored.png");
+            string spineFileFaded = Path.Combine(outputFolder, "01-SpineBlend.png");
+            string frontCoverResized = Path.Combine(outputFolder, "05-FrontCover.png");
+            string frontCoverFileMirrored = Path.Combine(outputFolder, "03-FrontCoverMirrored.png");
             Directory.CreateDirectory(outputFolder);
             ProcessSpine(spineFile, spineFileFaded);
             ProcessCover(backCoverFile, backCoverFileResized, backCoverFileMirrored, true);
@@ -80,11 +80,11 @@ namespace BookCoverCreator
 
             Console.WriteLine("Image processing complete. You can now take the files from the output folder at {0} and put them into your template image as individual layers.");
             Console.WriteLine("Top down order is: ");
-            Console.WriteLine("1. SpineBlend.png");
-            Console.WriteLine("2. BackCoverMirrored.png");
-            Console.WriteLine("3. FrontCoverMirrored.png");
-            Console.WriteLine("4. BackCover.png");
-            Console.WriteLine("5. FrontCover.png");
+            Console.WriteLine("01-SpineBlend.png");
+            Console.WriteLine("02-BackCoverMirrored.png");
+            Console.WriteLine("03-FrontCoverMirrored.png");
+            Console.WriteLine("04-BackCover.png");
+            Console.WriteLine("05-FrontCover.png");
         }
 
         private static Dictionary<string, string> ParseKeyValueFile(string fileName)
