@@ -18,5 +18,6 @@ The order, top down, is:
 
 The templates folder has a Paint.NET template you can start with.
 
-In this screenshot you can see how I've arranged the layers, including the spine blending with the mirrored version of the front and back.  
+In this screenshot you can see how I've arranged the layers, including the spine blending with the mirrored version of the front and back.
+
 ![Bane War Fury example cover](img/Screenshot1.webp)
