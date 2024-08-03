@@ -1,5 +1,7 @@
 # Book Cover Creator
 
+[Check out my writing site!](https://jeffjohnson.ninja)
+
 A book cover requires three parts:
 - Back
 - Spine
@@ -21,6 +23,12 @@ The templates folder has a Paint.NET template you can start with.
 In this screenshot you can see how I've arranged the layers, including the spine blending with the mirrored version of the front and back.
 
 ![Bane War Fury example cover](img/Screenshot1.webp)
+
+## AI
+I used Midjourney to make the spine image with the following prompt:
+`wild dark energy, magic spell gone wrong, insane magic, cosmic, fantastic, dark fantasy magic, blue, edgy, science fiction, space, award winning art, cinematic effects, war --ar 7:1`
+
+If you use Midjourney, you'll need to upscale your images. I've found a fantastic free tool to do this at https://github.com/upscayl/upscayl. Seriously, it's amazing. Don't pay for sites or subscriptions that provide this functionality.
 
 [Check out my writing site!](https://jeffjohnson.ninja)
 
