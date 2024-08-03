@@ -36,6 +36,8 @@ namespace BookCoverCreator
         private static Rectangle frontCoverMirrorRectDest;
         private static Rectangle frontCoverMirrorSource;
 
+        private static string paramFileName;
+
         /// <summary>
         /// Main
         /// </summary>
@@ -45,7 +47,7 @@ namespace BookCoverCreator
             if (args.Length != 1)
             {
                 Console.WriteLine("Please pass one argument, the file name containing the metadata to process.");
-                Console.WriteLine("This file must contain the following parameters:");
+                Console.WriteLine("This file must contain the following parameters, one per line:");
                 Console.WriteLine("InputFolder=value (the input folder containing the BackCover, Spine, and FrontCover files--default extension is .png).");
                 Console.WriteLine("OutputFolder=value (the output folder).");
                 Console.WriteLine();
@@ -60,9 +62,20 @@ namespace BookCoverCreator
                 Console.WriteLine("TemplateWidth (i.e. 4039)");
                 Console.WriteLine("TemplateHeight (i.e. 2775)");
                 Console.WriteLine("TemplateSpineWidth (i.e. 366)");
-                return;
+                Console.WriteLine();
+                Console.WriteLine("Enter parameters file name to process:");
+                paramFileName = Console.ReadLine();
+                if (string.IsNullOrWhiteSpace(paramFileName))
+                {
+                    Console.WriteLine("No parameters file name entered. Exiting.");
+                    return;
+                }
             }
-            var dict = ParseKeyValueFile(args[0]);
+            else
+            {
+                paramFileName = args[0];
+            }
+            var dict = ParseKeyValueFile(paramFileName);
             AssignVariables(dict);
 
             string backCoverFile = Path.Combine(inputFolder, backCoverFileName);
@@ -164,6 +177,14 @@ namespace BookCoverCreator
                 }
             }
 
+            if (!Path.IsPathRooted(inputFolder))
+            {
+                inputFolder = Path.Combine(Path.GetDirectoryName(paramFileName), inputFolder);
+            }
+            if (!Path.IsPathRooted(outputFolder))
+            {
+                outputFolder = Path.Combine(Path.GetDirectoryName(paramFileName), outputFolder);
+            }
             frontWidth = (finalWidth - spineWidth) / 2;
             backWidth = finalWidth - frontWidth - spineWidth;
             finalRect = new(0, 0, finalWidth, finalHeight);
