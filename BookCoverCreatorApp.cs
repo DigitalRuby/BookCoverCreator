@@ -55,13 +55,11 @@ namespace BookCoverCreator
                 Console.WriteLine("BackCoverFile=value (the name of the back cover file in the input folder, default is BackCover.png).");
                 Console.WriteLine("SpineFile=value (the name of the spine file in the input folder, default is Spine.png).");
                 Console.WriteLine("FrontCoverFile=value (the name of the front cover file in the input folder, default is FrontCover.png).");
-                Console.WriteLine("CoverAspectRatio=value (i.e. 0.6667 for 6x9 paperback).");
-                Console.WriteLine("SpineAspectRatio=value (i.e. 0.13189 for 6x9 paperback).");
                 Console.WriteLine("SpineAlphaMultiplier=value (i.e. 2.0, higher values reduce fade effect).");
                 Console.WriteLine("SpineAlphaPower (i.e. 1.0, lower values reduce fade effect, set to 0 for no fade).");
-                Console.WriteLine("TemplateWidth (i.e. 4039)");
-                Console.WriteLine("TemplateHeight (i.e. 2775)");
-                Console.WriteLine("TemplateSpineWidth (i.e. 366)");
+                Console.WriteLine("Width (i.e. 4039)");
+                Console.WriteLine("Height (i.e. 2775)");
+                Console.WriteLine("SpineWidth (i.e. 366)");
                 Console.WriteLine();
                 Console.WriteLine("Enter parameters file name to process:");
                 paramFileName = Console.ReadLine();
@@ -153,25 +151,19 @@ namespace BookCoverCreator
                     case "frontcoverfile":
                         frontCoverFileName = kv.Value;
                         break;
-                    case "coveraspectratio":
-                        aspectRatioCover = double.Parse(kv.Value);
-                        break;
-                    case "spineaspectratio":
-                        aspectRatioSpine = double.Parse(kv.Value);
-                        break;
                     case "spinealphamultiplier":
                         spineAlphaMultiplier = float.Parse(kv.Value);
                         break;
                     case "spinealphapower":
                         spineAlphaPower = float.Parse(kv.Value);
                         break;
-                    case "templatewidth":
+                    case "width":
                         finalWidth = int.Parse(kv.Value);
                         break;
-                    case "templateheight":
+                    case "height":
                         finalHeight = int.Parse(kv.Value);
                         break;
-                    case "templatespinewidth":
+                    case "spinewidth":
                         spineWidth = int.Parse(kv.Value);
                         break;
                 }
@@ -185,6 +177,8 @@ namespace BookCoverCreator
             {
                 outputFolder = Path.Combine(Path.GetDirectoryName(paramFileName), outputFolder);
             }
+            aspectRatioSpine = (double)spineWidth / finalHeight;
+            aspectRatioCover = (double)((finalWidth - spineWidth) / 2.0) / finalHeight;
             frontWidth = (finalWidth - spineWidth) / 2;
             backWidth = finalWidth - frontWidth - spineWidth;
             finalRect = new(0, 0, finalWidth, finalHeight);

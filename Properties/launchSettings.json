@@ -2,7 +2,7 @@
   "profiles": {
     "ConsoleApp1": {
       "commandName": "Project",
-      "commandLineArgs": "\"D:/backup/Files/BaneWar/Assets/Images/Book1/Cover/Publish/Working/args.txt\""
+      "commandLineArgs": "\"D:/backup/Files/BaneWar/Assets/Images/Book1/Cover/Publish/WorkingHard/args_hard.txt\""
     }
   }
 }
