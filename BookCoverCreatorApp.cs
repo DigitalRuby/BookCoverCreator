@@ -50,6 +50,9 @@ namespace BookCoverCreator
                 Console.WriteLine("This file must contain the following parameters, one per line:");
                 Console.WriteLine("InputFolder=value (the input folder containing the BackCover, Spine, and FrontCover files--default extension is .png).");
                 Console.WriteLine("OutputFolder=value (the output folder).");
+                Console.WriteLine("Width (i.e. 4039)");
+                Console.WriteLine("Height (i.e. 2775)");
+                Console.WriteLine("SpineWidth (i.e. 366)");
                 Console.WriteLine();
                 Console.WriteLine("The following parameters are optional:");
                 Console.WriteLine("BackCoverFile=value (the name of the back cover file in the input folder, default is BackCover.png).");
@@ -57,9 +60,6 @@ namespace BookCoverCreator
                 Console.WriteLine("FrontCoverFile=value (the name of the front cover file in the input folder, default is FrontCover.png).");
                 Console.WriteLine("SpineAlphaMultiplier=value (i.e. 2.0, higher values reduce fade effect).");
                 Console.WriteLine("SpineAlphaPower (i.e. 1.0, lower values reduce fade effect, set to 0 for no fade).");
-                Console.WriteLine("Width (i.e. 4039)");
-                Console.WriteLine("Height (i.e. 2775)");
-                Console.WriteLine("SpineWidth (i.e. 366)");
                 Console.WriteLine();
                 Console.WriteLine("Enter parameters file name to process:");
                 paramFileName = Console.ReadLine();
@@ -104,7 +104,7 @@ namespace BookCoverCreator
             Dictionary<string, string> keyValuePairs = new(StringComparer.OrdinalIgnoreCase);
 
             // Read all lines from the file
-            string[] lines = File.ReadAllLines(fileName);
+            string[] lines = File.ReadAllLines(fileName.Trim('"'));
 
             // Iterate through each line
             foreach (string line in lines)
