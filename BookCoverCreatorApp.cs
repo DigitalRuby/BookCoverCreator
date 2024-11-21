@@ -85,10 +85,9 @@ namespace BookCoverCreator
             string frontCoverResized = Path.Combine(outputFolder, "05-FrontCover.png");
             string frontCoverFileMirrored = Path.Combine(outputFolder, "03-FrontCoverMirrored.png");
             Directory.CreateDirectory(outputFolder);
-            ProcessSpine(spineFile, spineFileFaded);
             ProcessCover(backCoverFile, backCoverFileResized, backCoverFileMirrored, true);
             ProcessCover(frontCoverFile, frontCoverResized, frontCoverFileMirrored, false);
-
+            ProcessSpine(spineFile, spineFileFaded);
             Console.WriteLine("Image processing complete. You can now take the files from the output folder at {0} and put them into your template image as individual layers.");
             Console.WriteLine("Top down order is: ");
             Console.WriteLine("01-SpineBlend.png");
@@ -187,45 +186,77 @@ namespace BookCoverCreator
             backCoverMirrorRectDest = new(spineRect.X, 0, spineRect.Width / 2, spineRect.Height);
             backCoverMirrorRectSource = new(0, 0, spineRect.Width / 2, spineRect.Height);
             frontCoverRect = new(backWidth + spineWidth, 0, frontWidth, finalHeight);
-            frontCoverMirrorRectDest = new(spineRect.Left + (spineRect.Width / 2), 0, spineRect.Width / 2, 0);
+            frontCoverMirrorRectDest = new(spineRect.Left + (spineRect.Width / 2), 0, spineRect.Width / 2, spineRect.Height);
             frontCoverMirrorSource = new(frontCoverRect.Width - (spineRect.Width / 2), 0, (spineRect.Width / 2), spineRect.Height);
         }
 
         private static void ProcessCover(string inputFilePath, string outputFileResized, string outputFileMirrored, bool isBackCover)
         {
-            using Image<Rgba32> coverImage = Image.Load<Rgba32>(inputFilePath);
-            Crop(coverImage, aspectRatioCover);
+            using var coverImage = Image.Load<Rgba32>(inputFilePath);
+            using var croppedImage = Crop(coverImage, aspectRatioCover);
 
             // Create the final image
-            using Image<Rgba32> finalImage = new(finalRect.Width, finalRect.Height, Color.Transparent);
+            var finalImage = new Image<Rgba32>(finalRect.Width, finalRect.Height, Color.Transparent);
 
             // Calculate positions to position the resized image
             Rectangle coverRectDest = isBackCover ? backCoverRect : frontCoverRect;
             Rectangle mirrorRectDest = isBackCover ? backCoverMirrorRectDest : frontCoverMirrorRectDest;
             Rectangle mirrorRectSource = isBackCover ? backCoverMirrorRectSource : frontCoverMirrorSource;
 
-
             // Draw the resized image onto the final image
-            coverImage.Mutate(ctx => ctx.Resize(new Size(coverRectDest.Width, coverRectDest.Height)));
-            finalImage.Mutate(ctx => ctx.DrawImage(coverImage, new Point(coverRectDest.X, coverRectDest.Y), 1.0f));
+            using var croppedImageResized = croppedImage.Clone(ctx => ctx.Resize(new Size(coverRectDest.Width, coverRectDest.Height)));
+            finalImage.Mutate(ctx => ctx.DrawImage(croppedImageResized, new Point(coverRectDest.X, coverRectDest.Y), 1.0f));
 
             // Save the final image
             finalImage.Save(outputFileResized);
 
-            // Create the mirrored image
-            using Image<Rgba32> mirroredImage = new(coverRectDest.Width, coverRectDest.Height);
-            mirroredImage.Mutate(ctx => ctx.DrawImage(coverImage, new Point(0, 0), 1.0f));
-            mirroredImage.Mutate(ctx => ctx.Flip(FlipMode.Horizontal));
+            // Re-use final image for mirroring
+            finalImage.Dispose();
+            finalImage = new Image<Rgba32>(finalRect.Width, finalRect.Height, Color.Transparent);
 
-            // extract the mirror rect source from the mirrored image
-            using Image<Rgba32> mirroredImageSource = mirroredImage.Clone(ctx => ctx.Crop(mirrorRectSource));
+            // If we have space, extend the image instead of mirroring
+            float widthRatio = (float)croppedImageResized.Width / (float)croppedImage.Width;
 
-            // Draw the mirrored image onto the final image
-            finalImage.Mutate(ctx => ctx.Clear(Color.Transparent));
-            finalImage.Mutate(ctx => ctx.DrawImage(mirroredImageSource, new Point(mirrorRectDest.X, mirrorRectDest.Y), 1.0f));
+            // Convert from cropt resize measures to original image measures
+            int neededGap = (int)((float)mirrorRectSource.Width / widthRatio);
+            int actualGap = (coverImage.Width - croppedImage.Width) / 2;
+            if (neededGap <= actualGap)
+            {
+                // Extract the edge of the cover, using the right side for back and left side for front,
+                //  then draw this onto the final image at the mirror position
+                // Create a crop rect that takes into account the original cover size and the final cover size
+                int croppedX = ((coverImage.Width - croppedImage.Width) / 2);
+                int x = isBackCover ? croppedImage.Width + croppedX : croppedX - neededGap;
+                int y = (croppedImage.Height - coverImage.Height) / 2;
+                int width = neededGap;
+                int height = croppedImage.Height;
+                var cropRect = new Rectangle(x, y, width, height);
+                using var edgeImage = coverImage.Clone(ctx =>
+                {
+                    ctx.Crop(cropRect);
+                    ctx.Resize(mirrorRectDest.Width, mirrorRectDest.Height);
+                });
+                finalImage.Mutate(ctx => ctx.DrawImage(edgeImage, new Point(mirrorRectDest.X, mirrorRectDest.Y), 1.0f));
+            }
+            else
+            {
+                // Create the mirrored image
+                using var mirroredImage = new Image<Rgba32>(coverRectDest.Width, coverRectDest.Height);
+
+                // Draw image and mirror it
+                mirroredImage.Mutate(ctx => ctx.DrawImage(croppedImageResized, new Point(0, 0), 1.0f));
+                mirroredImage.Mutate(ctx => ctx.Flip(FlipMode.Horizontal));
+
+                // Extract the mirror rect source from the mirrored image
+                using var mirroredImageSource = mirroredImage.Clone(ctx => ctx.Crop(mirrorRectSource));
+
+                // Draw the mirrored image onto the final image
+                finalImage.Mutate(ctx => ctx.DrawImage(mirroredImageSource, new Point(mirrorRectDest.X, mirrorRectDest.Y), 1.0f));
+            }
 
             // Save the mirrored image
             finalImage.Save(outputFileMirrored);
+            finalImage.Dispose();
         }
             
         private static void ProcessSpine(string inputFilePath, string outputFilePath)
@@ -252,7 +283,7 @@ namespace BookCoverCreator
             finalImage.Save(outputFilePath);
         }
 
-        private static void Crop(Image<Rgba32> image, double aspectRatio)
+        private static Image<Rgba32> Crop(Image<Rgba32> image, double aspectRatio)
         {
             // Calculate the desired dimensions of the cropped image
             var imageAspectRatio = (double)image.Width / (double)image.Height;
@@ -264,7 +295,9 @@ namespace BookCoverCreator
             var y = (image.Height - cropHeight) / 2;
 
             // Crop the image
-            image.Mutate(ctx => ctx.Crop(new Rectangle(x, y, cropWidth, cropHeight)));
+            var croppedImage = image.Clone();
+            croppedImage.Mutate(ctx => ctx.Crop(new Rectangle(x, y, cropWidth, cropHeight)));
+            return croppedImage;
         }
 
         private static void RemoveBlackRows(Image<Rgba32> image)
