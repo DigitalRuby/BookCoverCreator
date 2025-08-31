@@ -19,7 +19,6 @@ namespace BookCoverCreator
         private static int finalWidth = 4039;
         private static int finalHeight = 2775;
         private static int spineWidth = 366;
-        private static string inputFolder;
         private static string outputFolder;
         private static string backCoverFileName = "BackCover.png";
         private static string spineFileName = "Spine.png";
@@ -48,7 +47,6 @@ namespace BookCoverCreator
             {
                 Console.WriteLine("Please pass one argument, the file name containing the metadata to process.");
                 Console.WriteLine("This file must contain the following parameters, one per line:");
-                Console.WriteLine("InputFolder=value (the input folder containing the BackCover, Spine, and FrontCover files--default extension is .png).");
                 Console.WriteLine("OutputFolder=value (the output folder).");
                 Console.WriteLine("Width (i.e. 4039)");
                 Console.WriteLine("Height (i.e. 2775)");
@@ -73,12 +71,13 @@ namespace BookCoverCreator
             {
                 paramFileName = args[0];
             }
+            paramFileName = paramFileName.Trim('"');
             var dict = ParseKeyValueFile(paramFileName);
             AssignVariables(dict);
 
-            string backCoverFile = Path.Combine(inputFolder, backCoverFileName);
-            string spineFile = Path.Combine(inputFolder, spineFileName);
-            string frontCoverFile = Path.Combine(inputFolder, frontCoverFileName);
+            string backCoverFile = backCoverFileName;
+            string spineFile = spineFileName;
+            string frontCoverFile = frontCoverFileName;
             string backCoverFileResized = Path.Combine(outputFolder, "04-BackCover.png");
             string backCoverFileMirrored = Path.Combine(outputFolder, "02-BackCoverMirrored.png");
             string spineFileFaded = Path.Combine(outputFolder, "01-SpineBlend.png");
@@ -131,24 +130,31 @@ namespace BookCoverCreator
 
         private static void AssignVariables(Dictionary<string, string> dict)
         {
+            static string RootToParamFile(string path)
+            {
+                path = path.Trim('"');
+                if (!Path.IsPathRooted(path))
+                {
+                      path = Path.Combine(Path.GetDirectoryName(paramFileName), path);
+                }
+                return path;
+            }
+
             foreach (var kv in dict)
             {
                 switch (kv.Key.ToLowerInvariant())
                 {
-                    case "inputfolder":
-                        inputFolder = kv.Value;
-                        break;
                     case "outputfolder":
-                        outputFolder = kv.Value;
+                        outputFolder = RootToParamFile(kv.Value);
                         break;
                     case "backcoverfile":
-                        backCoverFileName = kv.Value;
+                        backCoverFileName = RootToParamFile(kv.Value);
                         break;
                     case "spinefile":
-                        spineFileName = kv.Value;
+                        spineFileName = RootToParamFile(kv.Value);
                         break;
                     case "frontcoverfile":
-                        frontCoverFileName = kv.Value;
+                        frontCoverFileName = RootToParamFile(kv.Value);
                         break;
                     case "spinealphamultiplier":
                         spineAlphaMultiplier = float.Parse(kv.Value);
@@ -168,14 +174,6 @@ namespace BookCoverCreator
                 }
             }
 
-            if (!Path.IsPathRooted(inputFolder))
-            {
-                inputFolder = Path.Combine(Path.GetDirectoryName(paramFileName), inputFolder);
-            }
-            if (!Path.IsPathRooted(outputFolder))
-            {
-                outputFolder = Path.Combine(Path.GetDirectoryName(paramFileName), outputFolder);
-            }
             aspectRatioSpine = (double)spineWidth / finalHeight;
             aspectRatioCover = (double)((finalWidth - spineWidth) / 2.0) / finalHeight;
             frontWidth = (finalWidth - spineWidth) / 2;
