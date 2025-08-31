@@ -19,6 +19,7 @@ namespace BookCoverCreator
         private static int finalWidth = 4039;
         private static int finalHeight = 2775;
         private static int spineWidth = 366;
+        private static string inputFolder;
         private static string outputFolder;
         private static string backCoverFileName = "BackCover.png";
         private static string spineFileName = "Spine.png";
@@ -53,6 +54,7 @@ namespace BookCoverCreator
                 Console.WriteLine("SpineWidth (i.e. 366)");
                 Console.WriteLine();
                 Console.WriteLine("The following parameters are optional:");
+                Console.WriteLine("InputFolder=value (the input folder to use for relative paths, default is folder of the parameters file).");
                 Console.WriteLine("BackCoverFile=value (the name of the back cover file in the input folder, default is BackCover.png).");
                 Console.WriteLine("SpineFile=value (the name of the spine file in the input folder, default is Spine.png).");
                 Console.WriteLine("FrontCoverFile=value (the name of the front cover file in the input folder, default is FrontCover.png).");
@@ -130,12 +132,14 @@ namespace BookCoverCreator
 
         private static void AssignVariables(Dictionary<string, string> dict)
         {
+            inputFolder = Path.GetDirectoryName(paramFileName);
+
             static string RootToParamFile(string path)
             {
                 path = path.Trim('"');
                 if (!Path.IsPathRooted(path))
                 {
-                      path = Path.Combine(Path.GetDirectoryName(paramFileName), path);
+                      path = Path.Combine(inputFolder, path);
                 }
                 return path;
             }
@@ -144,6 +148,9 @@ namespace BookCoverCreator
             {
                 switch (kv.Key.ToLowerInvariant())
                 {
+                    case "inputfolder":
+                        inputFolder = RootToParamFile(kv.Value);
+                        break;
                     case "outputfolder":
                         outputFolder = RootToParamFile(kv.Value);
                         break;
