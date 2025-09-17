@@ -139,7 +139,7 @@ namespace BookCoverCreator
                 path = path.Trim('"');
                 if (!Path.IsPathRooted(path))
                 {
-                      path = Path.Combine(inputFolder, path);
+                    path = Path.Combine(inputFolder, path);
                 }
                 return path;
             }
