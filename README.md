@@ -28,5 +28,3 @@ I used Midjourney to make the spine image with the following prompt:
 
 If you use Midjourney, you'll need to upscale your images. I've found a fantastic free tool to do this at https://github.com/upscayl/upscayl. Seriously, it's amazing. Don't pay for sites or subscriptions that provide this functionality.
 
-[Check out my writing site!](https://jeffjohnson.ninja)
-
