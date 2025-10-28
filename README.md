@@ -1,7 +1,5 @@
 # Book Cover Creator
 
-[Check out my writing site!](https://jeffjohnson.ninja)
-
 A book cover requires three parts:
 - Back
 - Spine
