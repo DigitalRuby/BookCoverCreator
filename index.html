@@ -97,7 +97,6 @@
                 border-color: var(--accent-color);
             }
 
-        /* Range Slider Styling */
         input[type=range]
         {
             -webkit-appearance: none;
@@ -232,6 +231,22 @@
             height: 80px;
         }
 
+        .offset-control
+        {
+            width: 100%;
+            padding: 0 10px 5px 10px;
+            margin-top: -5px;
+        }
+
+        .offset-label
+        {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.7rem;
+            color: #888;
+            margin-bottom: 2px;
+        }
+
         /* --- Right Main Area --- */
         .main-area
         {
@@ -273,6 +288,31 @@
             {
                 background-color: #0063a5;
             }
+
+        .loader
+        {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--accent-color);
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: none;
+            margin-left: 10px;
+        }
+
+        @keyframes spin
+        {
+            0%
+            {
+                transform: rotate(0deg);
+            }
+
+            100%
+            {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 </head>
 <body>
@@ -283,27 +323,30 @@
     <input type="file" id="file-front" hidden accept="image/*">
 
     <div class="sidebar">
-        <h2>Cover Parameters</h2>
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+            <h2>Cover Parameters</h2>
+            <div id="render-spinner" class="loader"></div>
+        </div>
 
         <div class="params-grid">
             <div class="control-group">
-                <label>Width (px)</label>
-                <input type="number" id="finalWidth">
+                <label>Width (inches)</label>
+                <input type="number" id="finalWidth" step="0.01">
             </div>
             <div class="control-group">
-                <label>Height (px)</label>
-                <input type="number" id="finalHeight">
+                <label>Height (inches)</label>
+                <input type="number" id="finalHeight" step="0.01">
             </div>
             <div class="control-group full">
-                <label>Spine Width (px)</label>
-                <input type="number" id="spineWidth">
+                <label>Spine Width (inches)</label>
+                <input type="number" id="spineWidth" step="0.01">
             </div>
             <div class="control-group">
-                <label title="Set to 0 to disable blend">Spine Alpha Mult</label>
+                <label>Spine Alpha Mult</label>
                 <input type="number" id="spineAlphaMultiplier" step="0.1">
             </div>
             <div class="control-group">
-                <label title="Set to 0 to disable blend">Spine Alpha Power</label>
+                <label>Spine Alpha Power</label>
                 <input type="number" id="spineAlphaPower" step="0.1">
             </div>
 
@@ -318,7 +361,6 @@
 
         <h3>Images</h3>
         <div class="zones-container">
-
             <div class="drop-zone zone-medium is-template" id="dz-template" onclick="triggerFile('file-template')">
                 <p>Background Template</p>
                 <div class="info-block" id="info-template">
@@ -330,6 +372,10 @@
                 <p>Back Cover</p>
                 <div class="info-block" id="info-back"></div>
             </div>
+            <div class="offset-control">
+                <div class="offset-label"><span>Back Offset</span><span id="lbl-backOffset">0%</span></div>
+                <input type="range" id="backOffset" min="-25" max="25" step="1" value="0">
+            </div>
 
             <div class="drop-zone zone-medium" id="dz-spine" onclick="triggerFile('file-spine')">
                 <p>Spine</p>
@@ -339,6 +385,10 @@
             <div class="drop-zone zone-large" id="dz-front" onclick="triggerFile('file-front')">
                 <p>Front Cover</p>
                 <div class="info-block" id="info-front"></div>
+            </div>
+            <div class="offset-control">
+                <div class="offset-label"><span>Front Offset</span><span id="lbl-frontOffset">0%</span></div>
+                <input type="range" id="frontOffset" min="-25" max="25" step="1" value="0">
             </div>
         </div>
 
@@ -350,33 +400,39 @@
     </div>
 
     <script>
-        // --- State & Persistence ---
+        const DPI = 300;
+        const RENDER_DELAY_MS = 600;
+
+        // --- State ---
         const defaultParams = {
-            width: 4039,
+            width: 4065,
             height: 2775,
-            spineWidth: 366,
+            spineWidth: 390,
             alphaMult: 2.0,
             alphaPower: 1.0,
-            previewAlpha: 0.75 // Default 75%
+            previewAlpha: 0.75,
+            frontOffset: 0,
+            backOffset: 0
         };
 
         let savedParams = localStorage.getItem('coverParams');
-        const params = savedParams ? JSON.parse(savedParams) : defaultParams;
-
-        // Fallback if loading old state without alpha
+        let params = savedParams ? JSON.parse(savedParams) : defaultParams;
         if (typeof params.previewAlpha === 'undefined') params.previewAlpha = 0.75;
+        if (typeof params.frontOffset === 'undefined') params.frontOffset = 0;
+        if (typeof params.backOffset === 'undefined') params.backOffset = 0;
 
         const state = {
             params: params,
-            images: {
-                template: null,
-                front: null,
-                back: null,
-                spine: null
-            }
+            isCustomTemplate: false,
+            images: { template: null, front: null, back: null, spine: null }
         };
 
-        // --- DOM Elements ---
+        // --- CACHE ---
+        // We render the spine HERE once, and reuse it until spine parameters change.
+        let spineCacheCanvas = document.createElement('canvas');
+        let isSpineCacheDirty = true;
+
+        // --- DOM ---
         const dom = {
             width: document.getElementById('finalWidth'),
             height: document.getElementById('finalHeight'),
@@ -385,149 +441,111 @@
             aPower: document.getElementById('spineAlphaPower'),
             pAlpha: document.getElementById('previewAlpha'),
             pAlphaVal: document.getElementById('opacityVal'),
-            canvas: document.getElementById('previewCanvas')
+            canvas: document.getElementById('previewCanvas'),
+            spinner: document.getElementById('render-spinner'),
+
+            frontOff: document.getElementById('frontOffset'),
+            backOff: document.getElementById('backOffset'),
+            frontOffLbl: document.getElementById('lbl-frontOffset'),
+            backOffLbl: document.getElementById('lbl-backOffset')
         };
 
-        // Init Values
-        dom.width.value = state.params.width;
-        dom.height.value = state.params.height;
-        dom.spineW.value = state.params.spineWidth;
+        // Init UI
+        dom.width.value = (state.params.width / DPI).toFixed(2);
+        dom.height.value = (state.params.height / DPI).toFixed(2);
+        dom.spineW.value = (state.params.spineWidth / DPI).toFixed(2);
         dom.aMult.value = state.params.alphaMult;
         dom.aPower.value = state.params.alphaPower;
         dom.pAlpha.value = state.params.previewAlpha;
         dom.pAlphaVal.textContent = Math.round(state.params.previewAlpha * 100) + "%";
+        dom.frontOff.value = state.params.frontOffset;
+        dom.backOff.value = state.params.backOffset;
+        dom.frontOffLbl.textContent = state.params.frontOffset + "%";
+        dom.backOffLbl.textContent = state.params.backOffset + "%";
 
         const ctx = dom.canvas.getContext('2d', { willReadFrequently: true });
 
-        // --- Template Generation (Replaces Static Base64) ---
-        function generateDefaultTemplate()
+        // --- Debounce ---
+        let debounceTimer;
+        function scheduleUpdate(action, isHeavy)
         {
-            // Create an offscreen canvas to draw the KDP-style template
-            const tCvs = document.createElement('canvas');
-            const W = state.params.width;
-            const H = state.params.height;
-            const SW = state.params.spineWidth;
-            tCvs.width = W;
-            tCvs.height = H;
-            const tCtx = tCvs.getContext('2d');
+            dom.spinner.style.display = "block";
+            if (debounceTimer) clearTimeout(debounceTimer);
 
-            // 1. Background White
-            tCtx.fillStyle = "white";
-            tCtx.fillRect(0, 0, W, H);
+            const delay = isHeavy ? RENDER_DELAY_MS : 30; // 30ms for sliders = smooth
 
-            // 2. Pink Bleed Area (0.125" approx 37px at 300dpi, but we scale to fit)
-            // We'll use a proportional bleed for visualization (approx 1.5% of width)
-            const bleed = Math.round(W * 0.01);
-            tCtx.fillStyle = "rgba(255, 180, 180, 0.5)"; // Light Pink
-            // Outer border
-            tCtx.fillRect(0, 0, W, bleed); // Top
-            tCtx.fillRect(0, H - bleed, W, bleed); // Bottom
-            tCtx.fillRect(0, 0, bleed, H); // Left
-            tCtx.fillRect(W - bleed, 0, bleed, H); // Right
-
-            // Spine Bleed
-            const spineX = (W - SW) / 2;
-            tCtx.fillRect(spineX, 0, SW, H); // Spine area often has safety pink in templates
-
-            // 3. Spine Guides (Blue Dashed)
-            tCtx.beginPath();
-            tCtx.strokeStyle = "#007acc";
-            tCtx.lineWidth = 3;
-            tCtx.setLineDash([15, 15]);
-            tCtx.moveTo(spineX, 0);
-            tCtx.lineTo(spineX, H);
-            tCtx.moveTo(spineX + SW, 0);
-            tCtx.lineTo(spineX + SW, H);
-            tCtx.stroke();
-            tCtx.setLineDash([]);
-
-            // 4. White Spine Safe Area (Middle of spine)
-            tCtx.fillStyle = "white";
-            tCtx.fillRect(spineX + bleed, bleed, SW - (bleed * 2), H - (bleed * 2));
-
-            // 5. Barcode (Yellow Box)
-            const barW = 400;
-            const barH = 250;
-            // Standard placement: Bottom Right of Back Cover
-            // Back cover is on the Left
-            const backW = spineX;
-            tCtx.fillStyle = "yellow";
-            tCtx.fillRect(backW - barW - (bleed * 4), H - barH - (bleed * 4), barW, barH);
-
-            tCtx.fillStyle = "black";
-            tCtx.font = "bold 30px Arial";
-            tCtx.textAlign = "center";
-            tCtx.fillText("Barcode Area", backW - barW / 2 - (bleed * 4), H - barH / 2 - (bleed * 4));
-
-            // 6. Text Labels
-            tCtx.fillStyle = "black";
-            tCtx.font = "bold 40px Arial";
-
-            // Spine Text
-            tCtx.save();
-            tCtx.translate(spineX + SW / 2, H / 2);
-            tCtx.rotate(-Math.PI / 2);
-            tCtx.fillText(`${SW}px Spine`, 0, -10);
-            tCtx.restore();
-
-            // Cover Text
-            tCtx.fillText("Back Cover", backW / 2, H / 2);
-            tCtx.fillText("Front Cover", W - (backW / 2), H / 2);
-
-            // Helper
-            tCtx.font = "italic 30px Arial";
-            tCtx.fillStyle = "red";
-            tCtx.textAlign = "left";
-            tCtx.fillText("Pink Area = Bleed / Trim", bleed * 2, bleed * 4);
-
-            // Convert to Image
-            const img = new Image();
-            img.onload = () =>
+            debounceTimer = setTimeout(() =>
             {
-                state.images.template = img;
-                // Mark dropzone as loaded
-                document.getElementById('dz-template').classList.add('has-image');
-                updateLabels();
-                requestRender();
-            };
-            img.src = tCvs.toDataURL('image/webp', 0.5); // Compressed webp string
+                action();
+                dom.spinner.style.display = "none";
+            }, delay);
         }
 
-        // --- Interaction ---
-        const inputs = ['finalWidth', 'finalHeight', 'spineWidth', 'spineAlphaMultiplier', 'spineAlphaPower'];
-        inputs.forEach(id =>
+        // --- Inputs ---
+
+        // 1. Heavy Inputs (Dimensions) - Invalidate Cache
+        ['finalWidth', 'finalHeight', 'spineWidth'].forEach(id =>
         {
             document.getElementById(id).addEventListener('input', (e) =>
             {
-                const key = id === 'spineAlphaMultiplier' ? 'alphaMult' :
-                    id === 'spineAlphaPower' ? 'alphaPower' :
-                        id === 'spineWidth' ? 'spineWidth' :
-                            id === 'finalWidth' ? 'width' : 'height';
-
                 const val = parseFloat(e.target.value);
+                const key = id === 'spineWidth' ? 'spineWidth' : (id === 'finalWidth' ? 'width' : 'height');
                 if (!isNaN(val))
                 {
-                    state.params[key] = val;
+                    state.params[key] = Math.round(val * DPI);
                     saveState();
-                    updateLabels();
-                    // If template is default, regenerate it to match new dims
-                    if (state.images.template && state.images.template.src.startsWith('data:'))
+                    isSpineCacheDirty = true; // Dimensions changed
+                    scheduleUpdate(() =>
                     {
-                        generateDefaultTemplate();
-                    } else
-                    {
-                        requestRender();
-                    }
+                        updateLabels();
+                        if (!state.isCustomTemplate) generateDefaultTemplate();
+                        else requestRender();
+                    }, true);
                 }
             });
         });
 
+        // 2. Heavy Inputs (Alpha Calc) - Invalidate Cache
+        ['spineAlphaMultiplier', 'spineAlphaPower'].forEach(id =>
+        {
+            document.getElementById(id).addEventListener('input', (e) =>
+            {
+                const val = parseFloat(e.target.value);
+                const key = id === 'spineAlphaMultiplier' ? 'alphaMult' : 'alphaPower';
+                if (!isNaN(val))
+                {
+                    state.params[key] = val;
+                    saveState();
+                    isSpineCacheDirty = true; // Alpha calc changed
+                    scheduleUpdate(() => requestRender(), true);
+                }
+            });
+        });
+
+        // 3. Fast Inputs (Offsets) - NO Cache Invalidation needed
+        dom.frontOff.addEventListener('input', (e) =>
+        {
+            state.params.frontOffset = parseInt(e.target.value);
+            dom.frontOffLbl.textContent = state.params.frontOffset + "%";
+            saveState();
+            scheduleUpdate(() => requestRender(), false);
+        });
+
+        dom.backOff.addEventListener('input', (e) =>
+        {
+            state.params.backOffset = parseInt(e.target.value);
+            dom.backOffLbl.textContent = state.params.backOffset + "%";
+            saveState();
+            scheduleUpdate(() => requestRender(), false);
+        });
+
+        // 4. Fast Input (Opacity)
         dom.pAlpha.addEventListener('input', (e) =>
         {
             state.params.previewAlpha = parseFloat(e.target.value);
             dom.pAlphaVal.textContent = Math.round(state.params.previewAlpha * 100) + "%";
             saveState();
-            requestRender();
+            scheduleUpdate(() => requestRender(), false);
         });
 
         function saveState()
@@ -535,6 +553,7 @@
             localStorage.setItem('coverParams', JSON.stringify(state.params));
         }
 
+        // --- File Handling ---
         window.triggerFile = function (id) { document.getElementById(id).click(); };
 
         function setupImageHandler(zoneId, fileInputId, imageKey, infoId)
@@ -553,6 +572,14 @@
                         img.onload = () =>
                         {
                             state.images[imageKey] = img;
+                            if (imageKey === 'template')
+                            {
+                                state.isCustomTemplate = true;
+                                zone.classList.remove('is-template');
+                            }
+                            // If spine image changed, cache is dirty
+                            if (imageKey === 'spine') isSpineCacheDirty = true;
+
                             zone.classList.add('has-image');
                             updateLabels();
                             requestRender();
@@ -568,8 +595,7 @@
             zone.addEventListener('dragleave', (e) => { e.preventDefault(); zone.classList.remove('active'); });
             zone.addEventListener('drop', (e) =>
             {
-                e.preventDefault();
-                zone.classList.remove('active');
+                e.preventDefault(); zone.classList.remove('active');
                 handleFile(e.dataTransfer.files[0]);
             });
         }
@@ -579,64 +605,7 @@
         setupImageHandler('dz-front', 'file-front', 'front', 'info-front');
         setupImageHandler('dz-spine', 'file-spine', 'spine', 'info-spine');
 
-        // --- Label Logic ---
-        function updateLabels()
-        {
-            const geo = calculateGeometry();
-
-            const setLabel = (id, key, r) =>
-            {
-                const el = document.getElementById(id);
-                const img = state.images[key];
-                const rectText = `[${r.x}, ${r.y}, ${r.w}, ${r.h}]`;
-                let srcText = "Empty";
-                let srcColor = "#666";
-
-                if (img)
-                {
-                    srcText = `Src: ${img.width}x${img.height}`;
-                    srcColor = "#4caf50";
-                }
-                el.innerHTML = `<div class="rect-info">${rectText}</div><div class="src-info" style="color:${srcColor}">${srcText}</div>`;
-            };
-
-            const setTemplateLabel = () =>
-            {
-                const el = document.getElementById('info-template');
-                const img = state.images.template;
-                const targetText = `[0, 0, ${state.params.width}, ${state.params.height}]`;
-                let srcText = "Default Generated";
-                let srcColor = "#666";
-
-                if (img)
-                {
-                    if (img.src.startsWith('data:'))
-                    {
-                        srcText = "Default Template";
-                        srcColor = "#aaa";
-                    } else
-                    {
-                        srcText = `Src: ${img.width}x${img.height}`;
-                        srcColor = "#007acc";
-                    }
-                }
-                el.innerHTML = `<div class="rect-info">${targetText}</div><div class="src-info" style="color:${srcColor}">${srcText}</div>`;
-            };
-
-            setTemplateLabel();
-            setLabel('info-back', 'back', geo.back);
-            setLabel('info-spine', 'spine', geo.spine);
-            setLabel('info-front', 'front', geo.front);
-        }
-
-        // --- Rendering Logic ---
-        let renderTimeout;
-        function requestRender()
-        {
-            if (renderTimeout) clearTimeout(renderTimeout);
-            renderTimeout = setTimeout(() => { renderToCanvas(dom.canvas, false); }, 30);
-        }
-
+        // --- Render ---
         function calculateGeometry()
         {
             const p = state.params;
@@ -653,106 +622,169 @@
             };
         }
 
-        function getCropCoords(imgW, imgH, targetW, targetH)
+        function requestRender()
         {
-            const targetAspect = targetW / targetH;
-            const imgAspect = imgW / imgH;
-            let cropW, cropH;
-            if (targetAspect > imgAspect)
-            {
-                cropW = imgW;
-                cropH = Math.floor(imgW / targetAspect);
-            } else
-            {
-                cropH = imgH;
-                cropW = Math.floor(imgH * targetAspect);
-            }
-            return { x: Math.floor((imgW - cropW) / 2), y: Math.floor((imgH - cropH) / 2), w: cropW, h: cropH };
+            renderToCanvas(dom.canvas, false);
         }
 
         function renderToCanvas(targetCanvas, isExport)
         {
             const geo = calculateGeometry();
 
+            // Check if we need to rebuild the spine cache
+            if (isSpineCacheDirty)
+            {
+                updateSpineCache(geo.spine);
+                isSpineCacheDirty = false;
+            }
+
             if (targetCanvas.width !== geo.final.w || targetCanvas.height !== geo.final.h)
             {
-                targetCanvas.width = geo.final.w;
-                targetCanvas.height = geo.final.h;
+                targetCanvas.width = geo.final.w; targetCanvas.height = geo.final.h;
             }
 
-            const tCtx = targetCanvas.getContext('2d');
-            tCtx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+            const ctx = targetCanvas.getContext('2d');
+            ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
 
-            // 1. Draw Template (Only in Preview Mode)
             if (!isExport && state.images.template)
             {
-                tCtx.drawImage(state.images.template, 0, 0, geo.final.w, geo.final.h);
+                ctx.drawImage(state.images.template, 0, 0, geo.final.w, geo.final.h);
             }
 
-            // 2. Composite Layer
             const offCanvas = document.createElement('canvas');
-            offCanvas.width = geo.final.w;
-            offCanvas.height = geo.final.h;
+            offCanvas.width = geo.final.w; offCanvas.height = geo.final.h;
             const oCtx = offCanvas.getContext('2d');
 
             drawCompositeLayer(oCtx, geo);
 
-            tCtx.save();
-            if (!isExport)
-            {
-                tCtx.globalAlpha = state.params.previewAlpha;
-            }
-            tCtx.drawImage(offCanvas, 0, 0);
-            tCtx.restore();
+            ctx.save();
+            if (!isExport) ctx.globalAlpha = state.params.previewAlpha;
+            ctx.drawImage(offCanvas, 0, 0);
+            ctx.restore();
         }
 
         function drawCompositeLayer(ctx, geo)
         {
-            if (state.images.back)
-            {
-                drawImageCover(ctx, state.images.back, geo.back);
-            } else
-            {
-                drawPlaceholder(ctx, geo.back, "");
-            }
-            if (state.images.front)
-            {
-                drawImageCover(ctx, state.images.front, geo.front);
-            } else
-            {
-                drawPlaceholder(ctx, geo.front, "");
-            }
-            if (state.images.back)
-            {
-                processAutoBleed(ctx, state.images.back, geo.back, geo.blendLeft, true);
-            }
-            if (state.images.front)
-            {
-                processAutoBleed(ctx, state.images.front, geo.front, geo.blendRight, false);
-            }
+            // 1. Draw Covers (Fast)
+            if (state.images.back) drawImageCover(ctx, state.images.back, geo.back, state.params.backOffset);
+            else drawPlaceholder(ctx, geo.back, "");
+
+            if (state.images.front) drawImageCover(ctx, state.images.front, geo.front, state.params.frontOffset);
+            else drawPlaceholder(ctx, geo.front, "");
+
+            // 2. Draw Bleeds (Fast)
+            if (state.images.back) processAutoBleed(ctx, state.images.back, geo.back, geo.blendLeft, true, state.params.backOffset);
+            if (state.images.front) processAutoBleed(ctx, state.images.front, geo.front, geo.blendRight, false, state.params.frontOffset);
+
+            // 3. Draw Spine (Super Fast - Cached)
             if (state.images.spine)
             {
-                processSpine(ctx, state.images.spine, geo.spine);
+                // We just draw the cached canvas!
+                ctx.drawImage(spineCacheCanvas, geo.spine.x, geo.spine.y);
             } else
             {
-                ctx.strokeStyle = "rgba(255,255,255,0.2)";
-                ctx.lineWidth = 1;
+                ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 1;
                 ctx.strokeRect(geo.spine.x, geo.spine.y, geo.spine.w, geo.spine.h);
             }
         }
 
-        function drawImageCover(ctx, img, rect)
+        // --- SPINE CACHE LOGIC ---
+        function updateSpineCache(destRect)
         {
-            const crop = getCropCoords(img.width, img.height, rect.w, rect.h);
+            // Resize cache canvas if needed
+            if (spineCacheCanvas.width !== destRect.w || spineCacheCanvas.height !== destRect.h)
+            {
+                spineCacheCanvas.width = destRect.w;
+                spineCacheCanvas.height = destRect.h;
+            }
+
+            const sCtx = spineCacheCanvas.getContext('2d');
+            sCtx.clearRect(0, 0, destRect.w, destRect.h);
+
+            const img = state.images.spine;
+            if (!img) return;
+
+            // Perform the "Heavy" pixel logic here
+            const trimmedY = scanForBlackRows(img);
+            const effectiveH = trimmedY.bottom - trimmedY.top;
+            const crop = getCropCoords(img.width, effectiveH, destRect.w, destRect.h, 0);
+            const finalCropY = crop.y + trimmedY.top;
+            const mult = state.params.alphaMult;
+            const pow = state.params.alphaPower;
+
+            if (mult === 0 || pow === 0)
+            {
+                sCtx.drawImage(img, crop.x, finalCropY, crop.w, crop.h, 0, 0, destRect.w, destRect.h);
+                return;
+            }
+
+            // Draw clean image
+            sCtx.drawImage(img, crop.x, finalCropY, crop.w, crop.h, 0, 0, destRect.w, destRect.h);
+
+            // Apply Alpha LUT
+            const imgData = sCtx.getImageData(0, 0, destRect.w, destRect.h);
+            const data = imgData.data;
+            const w = destRect.w; const h = destRect.h; const halfW = w / 2;
+
+            const alphaFloats = new Float32Array(w);
+            for (let x = 0; x < w; x++)
+            {
+                const dist = Math.min(x, w - x - 1);
+                let alpha = Math.pow((dist / halfW) * mult, pow);
+                if (alpha > 1.0) alpha = 1.0;
+                if (alpha < 0.0) alpha = 0.0;
+                alphaFloats[x] = alpha;
+            }
+
+            for (let y = 0; y < h; y++)
+            {
+                for (let x = 0; x < w; x++)
+                {
+                    const i = (y * w + x) * 4;
+                    data[i + 3] = Math.floor(data[i + 3] * alphaFloats[x]);
+                }
+            }
+            sCtx.putImageData(imgData, 0, 0);
+        }
+
+        function getCropCoords(imgW, imgH, targetW, targetH, offsetPct)
+        {
+            const targetAspect = targetW / targetH;
+            const imgAspect = imgW / imgH;
+            let cropW, cropH;
+            if (targetAspect > imgAspect)
+            {
+                cropW = imgW; cropH = Math.floor(imgW / targetAspect);
+            } else
+            {
+                cropH = imgH; cropW = Math.floor(imgH * targetAspect);
+            }
+
+            let x = (imgW - cropW) / 2;
+            let y = (imgH - cropH) / 2;
+
+            if (offsetPct && offsetPct !== 0 && cropW < imgW)
+            {
+                const shiftAmount = (offsetPct / 100) * imgW;
+                x += shiftAmount;
+                if (x < 0) x = 0;
+                if (x + cropW > imgW) x = imgW - cropW;
+            }
+            return { x: Math.floor(x), y: Math.floor(y), w: cropW, h: cropH };
+        }
+
+        function drawImageCover(ctx, img, rect, offset)
+        {
+            const crop = getCropCoords(img.width, img.height, rect.w, rect.h, offset);
             ctx.drawImage(img, crop.x, crop.y, crop.w, crop.h, rect.x, rect.y, rect.w, rect.h);
         }
 
-        function processAutoBleed(ctx, img, sourceRect, destRect, isBackCover)
+        function processAutoBleed(ctx, img, sourceRect, destRect, isBackCover, offset)
         {
-            const crop = getCropCoords(img.width, img.height, sourceRect.w, sourceRect.h);
+            const crop = getCropCoords(img.width, img.height, sourceRect.w, sourceRect.h, offset);
             const widthRatio = sourceRect.w / crop.w;
             const neededSourceW = Math.floor(destRect.w / widthRatio);
-            const availableGap = Math.floor((img.width - crop.w) / 2);
+            const availableGap = isBackCover ? (img.width - (crop.x + crop.w)) : crop.x;
 
             if (neededSourceW <= availableGap)
             {
@@ -761,56 +793,14 @@
             } else
             {
                 const tempCvs = document.createElement('canvas');
-                tempCvs.width = destRect.w;
-                tempCvs.height = destRect.h;
+                tempCvs.width = destRect.w; tempCvs.height = destRect.h;
                 const tCtx = tempCvs.getContext('2d');
                 const srcX = isBackCover ? (crop.x + crop.w - neededSourceW) : crop.x;
-
-                tCtx.save();
-                tCtx.scale(-1, 1);
+                tCtx.save(); tCtx.scale(-1, 1);
                 tCtx.drawImage(img, srcX, crop.y, neededSourceW, crop.h, -destRect.w, 0, destRect.w, destRect.h);
                 tCtx.restore();
                 ctx.drawImage(tempCvs, destRect.x, destRect.y);
             }
-        }
-
-        function processSpine(ctx, img, destRect)
-        {
-            const trimmedY = scanForBlackRows(img);
-            const effectiveH = trimmedY.bottom - trimmedY.top;
-            const crop = getCropCoords(img.width, effectiveH, destRect.w, destRect.h);
-            const finalCropY = crop.y + trimmedY.top;
-            const mult = state.params.alphaMult;
-            const pow = state.params.alphaPower;
-
-            if (mult === 0 || pow === 0)
-            {
-                ctx.drawImage(img, crop.x, finalCropY, crop.w, crop.h, destRect.x, destRect.y, destRect.w, destRect.h);
-                return;
-            }
-            const sCanvas = document.createElement('canvas');
-            sCanvas.width = destRect.w;
-            sCanvas.height = destRect.h;
-            const sCtx = sCanvas.getContext('2d');
-            sCtx.drawImage(img, crop.x, finalCropY, crop.w, crop.h, 0, 0, destRect.w, destRect.h);
-            const imgData = sCtx.getImageData(0, 0, destRect.w, destRect.h);
-            const data = imgData.data;
-            const w = destRect.w;
-            const halfW = w / 2;
-            for (let y = 0; y < destRect.h; y++)
-            {
-                for (let x = 0; x < w; x++)
-                {
-                    const i = (y * w + x) * 4;
-                    const dist = Math.min(x, w - x - 1);
-                    let alpha = Math.pow((dist / halfW) * mult, pow);
-                    if (alpha > 1.0) alpha = 1.0;
-                    if (alpha < 0.0) alpha = 0.0;
-                    data[i + 3] = Math.floor(data[i + 3] * alpha);
-                }
-            }
-            sCtx.putImageData(imgData, 0, 0);
-            ctx.drawImage(sCanvas, destRect.x, destRect.y);
         }
 
         function scanForBlackRows(img)
@@ -834,18 +824,36 @@
 
         function drawPlaceholder(ctx, rect, text)
         {
-            ctx.fillStyle = "#222";
-            ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-            ctx.strokeStyle = "#444";
-            ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
-            ctx.fillStyle = "#555";
-            ctx.font = "bold 50px Arial";
-            ctx.textAlign = "center";
-            ctx.textBaseline = "middle";
-            if (text != null && text != '')
+            ctx.fillStyle = "#222"; ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+            ctx.strokeStyle = "#444"; ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+            ctx.fillStyle = "#555"; ctx.font = "bold 50px Arial";
+            ctx.textAlign = "center"; ctx.textBaseline = "middle";
+            if (text != null && text != '') ctx.fillText(text, rect.x + rect.w / 2, rect.y + rect.h / 2);
+        }
+
+        function updateLabels()
+        {
+            const geo = calculateGeometry();
+            const setLabel = (id, key, r) =>
             {
-                ctx.fillText(text, rect.x + rect.w / 2, rect.y + rect.h / 2);
-            }
+                const el = document.getElementById(id);
+                const img = state.images[key];
+                const rectText = `[${r.x}, ${r.y}, ${r.w}, ${r.h}] px`;
+                let srcText = "Empty"; let srcColor = "#666";
+                if (img) { srcText = `Src: ${img.width}x${img.height} px`; srcColor = "#4caf50"; }
+                el.innerHTML = `<div class="rect-info">${rectText}</div><div class="src-info" style="color:${srcColor}">${srcText}</div>`;
+            };
+            const el = document.getElementById('info-template');
+            const img = state.images.template;
+            const targetText = `[0, 0, ${state.params.width}, ${state.params.height}] px`;
+            let srcText = state.isCustomTemplate ? "Custom Upload" : "Default Generated";
+            let srcColor = state.isCustomTemplate ? "#e0912d" : "#007acc";
+            if (img && state.isCustomTemplate) srcText = `Src: ${img.width}x${img.height} px`;
+            el.innerHTML = `<div class="rect-info">${targetText}</div><div class="src-info" style="color:${srcColor}">${srcText}</div>`;
+
+            setLabel('info-back', 'back', geo.back);
+            setLabel('info-spine', 'spine', geo.spine);
+            setLabel('info-front', 'front', geo.front);
         }
 
         function downloadCanvas()
@@ -858,8 +866,46 @@
             link.click();
         }
 
-        // Init
+        function generateDefaultTemplate()
+        {
+            const tCvs = document.createElement('canvas');
+            const W = state.params.width; const H = state.params.height; const SW = state.params.spineWidth;
+            tCvs.width = W; tCvs.height = H;
+            const tCtx = tCvs.getContext('2d');
+            tCtx.fillStyle = "white"; tCtx.fillRect(0, 0, W, H);
+            const bleed = Math.round(W * 0.01);
+            tCtx.fillStyle = "rgba(255, 180, 180, 0.5)";
+            tCtx.fillRect(0, 0, W, bleed); tCtx.fillRect(0, H - bleed, W, bleed);
+            tCtx.fillRect(0, 0, bleed, H); tCtx.fillRect(W - bleed, 0, bleed, H);
+            const spineX = (W - SW) / 2; tCtx.fillRect(spineX, 0, SW, H);
+            tCtx.beginPath(); tCtx.strokeStyle = "#007acc"; tCtx.lineWidth = 3;
+            tCtx.setLineDash([15, 15]);
+            tCtx.moveTo(spineX, 0); tCtx.lineTo(spineX, H);
+            tCtx.moveTo(spineX + SW, 0); tCtx.lineTo(spineX + SW, H);
+            tCtx.stroke(); tCtx.setLineDash([]);
+            tCtx.fillStyle = "white"; tCtx.fillRect(spineX + bleed, bleed, SW - (bleed * 2), H - (bleed * 2));
+            const barW = 400; const barH = 250; const backW = spineX;
+            tCtx.fillStyle = "yellow"; tCtx.fillRect(backW - barW - (bleed * 4), H - barH - (bleed * 4), barW, barH);
+            tCtx.fillStyle = "black"; tCtx.font = "bold 30px Arial"; tCtx.textAlign = "center";
+            tCtx.fillText("Barcode Area", backW - barW / 2 - (bleed * 4), H - barH / 2 - (bleed * 4));
+            tCtx.fillStyle = "black"; tCtx.font = "bold 40px Arial";
+            tCtx.save(); tCtx.translate(spineX + SW / 2, H / 2); tCtx.rotate(-Math.PI / 2);
+            tCtx.fillText(`${(SW / DPI).toFixed(2)} in Spine`, 0, -10);
+            tCtx.restore();
+            tCtx.fillText("Back Cover", backW / 2, H / 2); tCtx.fillText("Front Cover", W - (backW / 2), H / 2);
+            const img = new Image();
+            img.onload = () =>
+            {
+                state.images.template = img;
+                document.getElementById('dz-template').classList.add('has-image');
+                updateLabels();
+                requestRender();
+            };
+            img.src = tCvs.toDataURL('image/webp', 0.5);
+        }
+
         generateDefaultTemplate();
+
     </script>
 </body>
 </html>
