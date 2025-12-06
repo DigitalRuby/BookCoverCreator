@@ -303,7 +303,7 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 40px;
+            padding: 8px;
             overflow: hidden; /* prevent scrollbars; we aspect-fit via JS */
             position: relative;
         }
@@ -1701,9 +1701,9 @@
             const coverH = geo.final.h;
 
             const mainRect = dom.mainArea.getBoundingClientRect();
-            // main-area padding is 40px all around
-            const paddingX = 80;
-            const paddingY = 80;
+            // main-area padding is 8px all around
+            const paddingX = 16; // 2 * 8
+            const paddingY = 16; // 2 * 8
 
             const availW = Math.max(10, mainRect.width - paddingX);
             const availH = Math.max(10, mainRect.height - paddingY);
@@ -2119,25 +2119,49 @@
                         return;
                     }
 
-                    const geo = getImageBoxGeometry(obj, canvasW, canvasH, imgEl);
-                    const centerX = geo.centerX;
-                    const centerY = geo.centerY;
+                    const imgW = imgEl.naturalWidth;
+                    const imgH = imgEl.naturalHeight;
+                    const aspect = imgH / imgW;
 
-                    // The outer overlay box is the visual (scaled) area
+                    const geo = getImageBoxGeometry(obj, canvasW, canvasH, imgEl);
+                    let centerX = geo.centerX;
+                    let centerY = geo.centerY;
+
+                    // Outer width is what you see (scaled box)
                     const boxW = geo.visualW;
-                    const boxH = geo.visualH;
                     const scale = geo.scale;
 
+                    // Compute border/padding in export pixels, like CSS (not using outline)
+                    const borderBase = style.borderSize || 0;
+                    const paddingBase = style.padding || 0;
+                    const borderPx = borderBase * resScale * scale;
+                    const paddingPx = paddingBase * resScale * scale;
+
+                    // In preview:
+                    //   usable content width = boxW - 2*(border + padding)
+                    //   content height = contentWidth * aspect
+                    //   outer height = contentHeight + 2*(border + padding)
+                    const contentW = Math.max(0, boxW - 2 * (borderPx + paddingPx));
+                    const contentH = contentW * aspect;
+                    const boxH = contentH + 2 * (borderPx + paddingPx);
+
+                    // Keep top of the overlay consistent with the original visual box,
+                    // then adjust centerY so height change doesn’t make it drift.
+                    const oldBoxH = geo.visualH;
+                    const topY = centerY - oldBoxH / 2;
+                    centerY = topY + boxH / 2;
+
+                    // Now feed the corrected boxW/boxH into the common box model
                     const layout = computeBoxModel(boxW, boxH, style, scale, resScale);
-                    const borderPx = layout.borderPx;
                     const borderRect = layout.borderRect;
                     const contentRect = layout.contentRect;
+                    const borderPxFinal = layout.borderPx;
 
                     ctx.save();
                     ctx.translate(centerX, centerY);
                     ctx.rotate(obj.rotation * Math.PI / 180);
 
-                    // Clip to the borderRect (rounded corners) before drawing image + shadow
+                    // Clip to borderRect for rounded corners
                     ctx.shadowColor = 'transparent';
                     ctx.shadowBlur = 0;
                     ctx.shadowOffsetX = 0;
@@ -2148,7 +2172,7 @@
                     drawRoundedRect(ctx, borderRect.x, borderRect.y, borderRect.w, borderRect.h, borderRect.r);
                     ctx.clip();
 
-                    // Shadow only on the image pixels
+                    // Shadow only on image pixels
                     if (style.shadowSize > 0 && style.shadowOpacity > 0)
                     {
                         ctx.shadowColor = toRgba(style.shadowColor || '#000000', style.shadowOpacity);
@@ -2164,7 +2188,7 @@
                         ctx.shadowOffsetY = 0;
                     }
 
-                    // Image is drawn inside contentRect (shrunken by border + padding)
+                    // Draw image respecting aspect ratio: contentRect.w was used to derive contentH
                     if (contentRect.w > 0 && contentRect.h > 0)
                     {
                         ctx.drawImage(imgEl, contentRect.x, contentRect.y, contentRect.w, contentRect.h);
@@ -2172,8 +2196,8 @@
 
                     ctx.restore();
 
-                    // Draw crisp border on borderRect (inside fixed overlay bounds, no shadow)
-                    if (borderPx > 0 && borderRect.w > 0 && borderRect.h > 0)
+                    // Border: inside fixed overlay bounds, no shadow
+                    if (borderPxFinal > 0 && borderRect.w > 0 && borderRect.h > 0)
                     {
                         ctx.shadowColor = 'transparent';
                         ctx.shadowBlur = 0;
@@ -2186,7 +2210,7 @@
                             style.borderColor || '#ffffff',
                             style.borderOpacity != null ? style.borderOpacity : 1
                         );
-                        ctx.lineWidth = borderPx;
+                        ctx.lineWidth = borderPxFinal;
                         ctx.stroke();
                     }
 
