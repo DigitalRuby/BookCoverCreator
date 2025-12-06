@@ -581,8 +581,7 @@
 
     <div class="sidebar">
         <div style="display:flex; align-items:center; justify-content:space-between;">
-            <h2>Cover Creator</h2>
-            <div id="render-spinner" class="loader"></div>
+            <h2>Cover Creator</h2><div id="render-spinner" class="loader"></div>
         </div>
 
         <div id="panel-layout" class="sidebar-section active">
@@ -658,19 +657,45 @@
                 <input type="text" id="prop-text-content">
             </div>
 
-            <h3>Outline / Stroke</h3>
+            <!-- Text Stroke / Image Outline (existing behavior) -->
+            <h3>Text Stroke / Image Outline</h3>
             <div class="params-grid">
                 <div class="control-group">
-                    <label>Color</label>
+                    <label>Stroke Color</label>
                     <input type="color" id="prop-outline-color" value="#000000">
                 </div>
                 <div class="control-group">
-                    <label>Size</label>
+                    <label>Stroke Size</label>
                     <input type="number" id="prop-outline-size" step="0.5" min="0">
                 </div>
                 <div class="control-group full">
-                    <label>Opacity</label>
+                    <label>Stroke Opacity</label>
                     <input type="range" id="prop-outline-opacity" min="0" max="1" step="0.1">
+                </div>
+            </div>
+
+            <!-- New Border Outline section for text (and usable by images if desired) -->
+            <h3>Border Outline</h3>
+            <div class="params-grid" id="group-border">
+                <div class="control-group">
+                    <label>Border Color</label>
+                    <input type="color" id="prop-border-color" value="#ffffff">
+                </div>
+                <div class="control-group">
+                    <label>Border Size</label>
+                    <input type="number" id="prop-border-size" step="0.5" min="0">
+                </div>
+                <div class="control-group full">
+                    <label>Border Opacity</label>
+                    <input type="range" id="prop-border-opacity" min="0" max="1" step="0.1">
+                </div>
+                <div class="control-group full">
+                    <label>Corner Radius</label>
+                    <input type="number" id="prop-corner-radius" step="1" min="0">
+                </div>
+                <div class="control-group full">
+                    <label>Padding</label>
+                    <input type="number" id="prop-padding" step="1" min="0">
                 </div>
             </div>
 
@@ -687,6 +712,37 @@
                 <div class="control-group full">
                     <label>Opacity</label>
                     <input type="range" id="prop-shadow-opacity" min="0" max="1" step="0.1">
+                </div>
+            </div>
+
+            <div id="group-text-bg">
+                <h3>Text Background</h3>
+                <div class="params-grid">
+                    <div class="control-group">
+                        <label>Type</label>
+                        <select id="prop-bg-type">
+                            <option value="none">None</option>
+                            <option value="solid">Solid</option>
+                            <option value="gradient">Gradient</option>
+                        </select>
+                    </div>
+                    <div class="control-group">
+                        <label>Color 1</label>
+                        <input type="color" id="prop-bg-color1" value="#000000">
+                    </div>
+                    <div class="control-group">
+                        <label>Color 2</label>
+                        <input type="color" id="prop-bg-color2" value="#ffffff">
+                    </div>
+                    <div class="control-group">
+                        <label>Direction</label>
+                        <select id="prop-bg-direction">
+                            <option value="vertical">Vertical</option>
+                            <option value="horizontal">Horizontal</option>
+                            <option value="diag1">Diag ↘</option>
+                            <option value="diag2">Diag ↗</option>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -766,6 +822,19 @@
             propShadColor: document.getElementById('prop-shadow-color'),
             propShadSize: document.getElementById('prop-shadow-size'),
             propShadOp: document.getElementById('prop-shadow-opacity'),
+
+            // Border, corner radius, padding, bg
+            propBorderColor: document.getElementById('prop-border-color'),
+            propBorderSize: document.getElementById('prop-border-size'),
+            propBorderOp: document.getElementById('prop-border-opacity'),
+            propCornerRadius: document.getElementById('prop-corner-radius'),
+            propPadding: document.getElementById('prop-padding'),
+            propBgType: document.getElementById('prop-bg-type'),
+            propBgColor1: document.getElementById('prop-bg-color1'),
+            propBgColor2: document.getElementById('prop-bg-color2'),
+            propBgDir: document.getElementById('prop-bg-direction'),
+            groupBorder: document.getElementById('group-border'),
+            groupTextBg: document.getElementById('group-text-bg')
         };
 
         // Init UI Inputs
@@ -929,13 +998,33 @@
                 scale: 1,
                 fontScale: 1, // used only for text
                 rotation: 0,
-                align: 'left', // default to left align
+                align: 'left', // left, center, right, justify
                 fontFamily: 'Arial',
                 boundsWidthPct: 30,  // width of the text box as % of canvas-wrapper
                 boundsHeightPct: 10, // height of the text box as % of canvas-wrapper
                 style: {
-                    outlineColor: '#000000', outlineSize: 0, outlineOpacity: 1,
-                    shadowColor: '#000000', shadowSize: 0, shadowOpacity: 1
+                    // Text stroke / image outline
+                    outlineColor: '#000000',
+                    outlineSize: 0,
+                    outlineOpacity: 1,
+
+                    // Shadow
+                    shadowColor: '#000000',
+                    shadowSize: 0,
+                    shadowOpacity: 1,
+
+                    // Border outline (for text box, and can also be used for images if desired)
+                    borderColor: '#ffffff',
+                    borderSize: 0,
+                    borderOpacity: 1,
+
+                    cornerRadius: 0,
+                    padding: 0,
+
+                    bgType: 'none',       // 'none' | 'solid' | 'gradient'
+                    bgColor1: '#000000',
+                    bgColor2: '#ffffff',
+                    bgDirection: 'vertical' // 'vertical' | 'horizontal' | 'diag1' | 'diag2'
                 }
             };
         }
@@ -943,7 +1032,6 @@
         function addTextOverlay()
         {
             const obj = createOverlayObject('text', 'New Text');
-            obj.style.outlineSize = 0; // Default text usually no outline
             overlays.push(obj);
             renderDomOverlays();
             selectOverlay(obj.id);
@@ -988,13 +1076,30 @@
 
             if (isText) dom.propText.value = obj.content;
 
-            dom.propOutColor.value = obj.style.outlineColor;
-            dom.propOutSize.value = obj.style.outlineSize;
-            dom.propOutOp.value = obj.style.outlineOpacity;
+            const s = obj.style;
 
-            dom.propShadColor.value = obj.style.shadowColor;
-            dom.propShadSize.value = obj.style.shadowSize;
-            dom.propShadOp.value = obj.style.shadowOpacity;
+            dom.propOutColor.value = s.outlineColor ?? '#000000';
+            dom.propOutSize.value = s.outlineSize ?? 0;
+            dom.propOutOp.value = s.outlineOpacity ?? 1;
+
+            dom.propShadColor.value = s.shadowColor ?? '#000000';
+            dom.propShadSize.value = s.shadowSize ?? 0;
+            dom.propShadOp.value = s.shadowOpacity ?? 1;
+
+            dom.propBorderColor.value = s.borderColor ?? '#ffffff';
+            dom.propBorderSize.value = s.borderSize ?? 0;
+            dom.propBorderOp.value = s.borderOpacity ?? 1;
+            dom.propCornerRadius.value = s.cornerRadius ?? 0;
+            dom.propPadding.value = s.padding ?? 0;
+
+            dom.propBgType.value = s.bgType ?? 'none';
+            dom.propBgColor1.value = s.bgColor1 ?? '#000000';
+            dom.propBgColor2.value = s.bgColor2 ?? '#ffffff';
+            dom.propBgDir.value = s.bgDirection ?? 'vertical';
+
+            // Show background & border groups appropriately
+            dom.groupTextBg.style.display = isText ? 'grid' : 'none';
+            dom.groupBorder.style.display = 'grid'; // useful for both text and image overlays
 
             // Highlight DOM
             document.querySelectorAll('.overlay-item').forEach(el => el.classList.remove('selected'));
@@ -1016,9 +1121,21 @@
         dom.propOutColor.addEventListener('input', e => updateSelectedStyle('outlineColor', e.target.value));
         dom.propOutSize.addEventListener('input', e => updateSelectedStyle('outlineSize', parseFloat(e.target.value)));
         dom.propOutOp.addEventListener('input', e => updateSelectedStyle('outlineOpacity', parseFloat(e.target.value)));
+
         dom.propShadColor.addEventListener('input', e => updateSelectedStyle('shadowColor', e.target.value));
         dom.propShadSize.addEventListener('input', e => updateSelectedStyle('shadowSize', parseFloat(e.target.value)));
         dom.propShadOp.addEventListener('input', e => updateSelectedStyle('shadowOpacity', parseFloat(e.target.value)));
+
+        dom.propBorderColor.addEventListener('input', e => updateSelectedStyle('borderColor', e.target.value));
+        dom.propBorderSize.addEventListener('input', e => updateSelectedStyle('borderSize', parseFloat(e.target.value)));
+        dom.propBorderOp.addEventListener('input', e => updateSelectedStyle('borderOpacity', parseFloat(e.target.value)));
+
+        dom.propCornerRadius.addEventListener('input', e => updateSelectedStyle('cornerRadius', parseFloat(e.target.value)));
+        dom.propPadding.addEventListener('input', e => updateSelectedStyle('padding', parseFloat(e.target.value)));
+        dom.propBgType.addEventListener('change', e => updateSelectedStyle('bgType', e.target.value));
+        dom.propBgColor1.addEventListener('input', e => updateSelectedStyle('bgColor1', e.target.value));
+        dom.propBgColor2.addEventListener('input', e => updateSelectedStyle('bgColor2', e.target.value));
+        dom.propBgDir.addEventListener('change', e => updateSelectedStyle('bgDirection', e.target.value));
 
         function updateSelectedProp(key, val)
         {
@@ -1051,6 +1168,21 @@
                 obj.style[key] = val;
                 updateDomOverlayStyle(obj);
             }
+        }
+        function drawRoundedRect(ctx, x, y, width, height, radius)
+        {
+            radius = Math.max(0, radius || 0);
+            const r = Math.min(radius, width / 2, height / 2);
+
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + width - r, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+            ctx.lineTo(x + width, y + height - r);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+            ctx.lineTo(x + r, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
         }
 
         // --- DOM RENDERER FOR OVERLAYS ---
@@ -1147,21 +1279,21 @@
             {
                 // Font
                 html += `<div class="popup-row"><label>Font</label><select onchange="updateTransform('${obj.id}', 'fontFamily', this.value)">
-                                <option value="Arial" ${obj.fontFamily == 'Arial' ? 'selected' : ''}>Arial</option>
-                                <option value="'Times New Roman'" ${obj.fontFamily == "'Times New Roman'" ? 'selected' : ''}>Times</option>
-                                <option value="'Courier New'" ${obj.fontFamily == "'Courier New'" ? 'selected' : ''}>Courier</option>
-                                <option value="Georgia" ${obj.fontFamily == 'Georgia' ? 'selected' : ''}>Georgia</option>
-                                <option value="Verdana" ${obj.fontFamily == 'Verdana' ? 'selected' : ''}>Verdana</option>
-                                <option value="Impact" ${obj.fontFamily == 'Impact' ? 'selected' : ''}>Impact</option>
-                            </select></div>`;
+                                    <option value="Arial" ${obj.fontFamily == 'Arial' ? 'selected' : ''}>Arial</option>
+                                    <option value="'Times New Roman'" ${obj.fontFamily == "'Times New Roman'" ? 'selected' : ''}>Times</option>
+                                    <option value="'Courier New'" ${obj.fontFamily == "'Courier New'" ? 'selected' : ''}>Courier</option>
+                                    <option value="Georgia" ${obj.fontFamily == 'Georgia' ? 'selected' : ''}>Georgia</option>
+                                    <option value="Verdana" ${obj.fontFamily == 'Verdana' ? 'selected' : ''}>Verdana</option>
+                                    <option value="Impact" ${obj.fontFamily == 'Impact' ? 'selected' : ''}>Impact</option>
+                                </select></div>`;
 
                 // Align
                 html += `<div class="popup-row"><label>Align</label><div class="icon-btn-group">
-                                <div class="icon-btn ${obj.align == 'left' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'left')"><svg><use href="#icon-left"/></svg></div>
-                                <div class="icon-btn ${obj.align == 'center' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'center')"><svg><use href="#icon-center"/></svg></div>
-                                <div class="icon-btn ${obj.align == 'right' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'right')"><svg><use href="#icon-right"/></svg></div>
-                                <div class="icon-btn ${obj.align == 'justify' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'justify')"><svg><use href="#icon-full"/></svg></div>
-                            </div></div>`;
+                                    <div class="icon-btn ${obj.align == 'left' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'left')"><svg><use href="#icon-left"/></svg></div>
+                                    <div class="icon-btn ${obj.align == 'center' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'center')"><svg><use href="#icon-center"/></svg></div>
+                                    <div class="icon-btn ${obj.align == 'right' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'right')"><svg><use href="#icon-right"/></svg></div>
+                                    <div class="icon-btn ${obj.align == 'justify' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'justify')"><svg><use href="#icon-full"/></svg></div>
+                                </div></div>`;
             }
             return html;
         }
@@ -1262,6 +1394,10 @@
             };
 
             const shadowStr = `drop-shadow(0px 0px ${s.shadowSize}px ${hexToRgbA(s.shadowColor, s.shadowOpacity)})`;
+            const cornerRadiusPx = (s.cornerRadius || 0) + 'px';
+            const paddingPx = (s.padding || 0) + 'px';
+
+            el.style.borderRadius = cornerRadiusPx;
 
             if (obj.type === 'text')
             {
@@ -1271,7 +1407,10 @@
                 content.style.color = "#FFFFFF";
                 content.style.textAlign = obj.align;
 
-                // Text Outline
+                // Padding inside text box (inside border)
+                content.style.padding = paddingPx;
+
+                // Text stroke
                 if (s.outlineSize > 0)
                 {
                     content.style.webkitTextStroke = `${s.outlineSize}px ${hexToRgbA(s.outlineColor, s.outlineOpacity)}`;
@@ -1283,20 +1422,69 @@
                 // Text Shadow
                 content.style.filter = shadowStr;
 
-            } else if (img)
-            {
-                // Image Outline (Border)
-                if (s.outlineSize > 0)
+                // Background
+                if (s.bgType === 'none')
                 {
-                    img.style.border = `${s.outlineSize}px solid ${hexToRgbA(s.outlineColor, s.outlineOpacity)}`;
-                } else
+                    content.style.background = 'transparent';
+                }
+                else if (s.bgType === 'solid')
                 {
-                    img.style.border = 'none';
+                    content.style.background = s.bgColor1 || '#000000';
+                }
+                else if (s.bgType === 'gradient')
+                {
+                    const c1 = s.bgColor1 || '#000000';
+                    const c2 = s.bgColor2 || '#ffffff';
+                    let dir = 'to bottom';
+                    if (s.bgDirection === 'horizontal') dir = 'to right';
+                    else if (s.bgDirection === 'diag1') dir = 'to bottom right';
+                    else if (s.bgDirection === 'diag2') dir = 'to top right';
+                    content.style.background = `linear-gradient(${dir}, ${c1}, ${c2})`;
                 }
 
-                // Image Shadow
+                // Border outline for the text box
+                const borderColor = s.borderColor || '#ffffff';
+                const borderSize = s.borderSize || 0;
+                const borderOpacity = (s.borderOpacity != null ? s.borderOpacity : 1);
+                if (borderSize > 0)
+                {
+                    content.style.border = `${borderSize}px solid ${hexToRgbA(borderColor, borderOpacity)}`;
+                }
+                else
+                {
+                    content.style.border = 'none';
+                }
+
+                content.style.borderRadius = cornerRadiusPx;
+
+            } else if (img)
+            {
+                // IMAGE OVERLAY:
+                // Border + padding are applied on content, image sits inside.
+
+                const borderColor = s.borderColor || s.outlineColor || '#ffffff';
+                const borderSize = (s.borderSize && s.borderSize > 0) ? s.borderSize : (s.outlineSize || 0);
+                const borderOpacity = (s.borderOpacity != null ? s.borderOpacity : s.outlineOpacity != null ? s.outlineOpacity : 1);
+
+                // Padding between image and border
+                content.style.padding = paddingPx;
+                content.style.borderRadius = cornerRadiusPx;
+
+                if (borderSize > 0)
+                {
+                    content.style.border = `${borderSize}px solid ${hexToRgbA(borderColor, borderOpacity)}`;
+                }
+                else
+                {
+                    content.style.border = 'none';
+                }
+
+                // Image shadows and sizing
                 img.style.filter = shadowStr;
-                img.style.width = "300px"; // Base width
+                img.style.width = "100%"; // fill content minus padding
+                img.style.height = "auto";
+                img.style.border = 'none';
+                img.style.borderRadius = 'inherit';
             }
         }
 
@@ -1599,6 +1787,8 @@
                     ctx.shadowBlur = 0;
                 }
 
+                const paddingPx = (s.padding || 0) * resScale;
+
                 if (obj.type === 'text')
                 {
                     const basePx = 50;
@@ -1608,8 +1798,8 @@
                     ctx.textBaseline = "top";
 
                     const lineHeight = fontSize * 1.2;
-                    const maxHeight = boxH;
-                    const maxWidth = boxW;
+                    const maxHeight = boxH - paddingPx * 2;
+                    const maxWidth = boxW - paddingPx * 2;
 
                     const maxLines = Math.max(1, Math.floor(maxHeight / lineHeight));
 
@@ -1641,21 +1831,87 @@
                         lines.push(currentLine);
                     }
 
-                    // --- CLIP WITH MARGIN FOR OUTLINE + SHADOW ---
                     const outlinePx = (s.outlineSize || 0) * resScale;
                     const shadowPx = (s.shadowSize || 0) * 2 * resScale;
-                    const clipMargin = outlinePx + shadowPx + 2; // small safety margin
+                    const clipMargin = outlinePx + shadowPx + 2;
+                    const cornerRadius = (s.cornerRadius || 0) * resScale;
 
+                    // Background (behind text) – full box
+                    if (s.bgType && s.bgType !== 'none')
+                    {
+                        let fill;
+                        if (s.bgType === 'solid')
+                        {
+                            fill = s.bgColor1 || '#000000';
+                        }
+                        else if (s.bgType === 'gradient')
+                        {
+                            const c1 = s.bgColor1 || '#000000';
+                            const c2 = s.bgColor2 || '#ffffff';
+                            let x0, y0, x1, y1;
+                            if (s.bgDirection === 'horizontal')
+                            {
+                                x0 = -boxW / 2; y0 = 0;
+                                x1 = boxW / 2; y1 = 0;
+                            }
+                            else if (s.bgDirection === 'diag1') // ↘
+                            {
+                                x0 = -boxW / 2; y0 = -boxH / 2;
+                                x1 = boxW / 2; y1 = boxH / 2;
+                            }
+                            else if (s.bgDirection === 'diag2') // ↗
+                            {
+                                x0 = -boxW / 2; y0 = boxH / 2;
+                                x1 = boxW / 2; y1 = -boxH / 2;
+                            }
+                            else // vertical
+                            {
+                                x0 = 0; y0 = -boxH / 2;
+                                x1 = 0; y1 = boxH / 2;
+                            }
+                            const grad = ctx.createLinearGradient(x0, y0, x1, y1);
+                            grad.addColorStop(0, c1);
+                            grad.addColorStop(1, c2);
+                            fill = grad;
+                        }
+
+                        ctx.save();
+                        ctx.beginPath();
+                        drawRoundedRect(ctx, -boxW / 2, -boxH / 2, boxW, boxH, cornerRadius);
+                        ctx.fillStyle = fill;
+                        ctx.fill();
+                        ctx.restore();
+                    }
+
+                    // Border outline rectangle
+                    const borderSize = (s.borderSize || 0) * resScale;
+                    const borderOpacity = (s.borderOpacity != null ? s.borderOpacity : 1);
+                    const borderColor = s.borderColor || '#ffffff';
+
+                    if (borderSize > 0)
+                    {
+                        ctx.save();
+                        ctx.beginPath();
+                        drawRoundedRect(ctx, -boxW / 2, -boxH / 2, boxW, boxH, cornerRadius);
+                        ctx.strokeStyle = hexToRgbA(borderColor, borderOpacity);
+                        ctx.lineWidth = borderSize;
+                        ctx.stroke();
+                        ctx.restore();
+                    }
+
+                    // Clip (with margin for outline + shadow)
                     ctx.beginPath();
-                    ctx.rect(
-                        -maxWidth / 2 - clipMargin,
-                        -maxHeight / 2 - clipMargin,
-                        maxWidth + clipMargin * 2,
-                        maxHeight + clipMargin * 2
+                    drawRoundedRect(
+                        ctx,
+                        -boxW / 2 - clipMargin,
+                        -boxH / 2 - clipMargin,
+                        boxW + clipMargin * 2,
+                        boxH + clipMargin * 2,
+                        cornerRadius + clipMargin
                     );
                     ctx.clip();
 
-                    // Stroke width for outline
+                    // Text stroke (around glyphs)
                     if (s.outlineSize > 0)
                     {
                         ctx.strokeStyle = hexToRgbA(s.outlineColor, s.outlineOpacity);
@@ -1670,22 +1926,21 @@
                         let x;
                         if (obj.align === 'center')
                         {
-                            ctx.textAlign = 'left'; // we'll center manually
+                            ctx.textAlign = 'left'; // center manually
                             x = -lineWidth / 2;
                         }
                         else if (obj.align === 'right')
                         {
                             ctx.textAlign = 'left';
-                            x = maxWidth / 2 - lineWidth;
+                            x = (boxW / 2) - paddingPx - lineWidth;
                         }
                         else
                         {
-                            // left or justify -> treat as left
                             ctx.textAlign = 'left';
-                            x = -maxWidth / 2;
+                            x = -boxW / 2 + paddingPx;
                         }
 
-                        const y = -maxHeight / 2 + i * lineHeight;
+                        const y = -boxH / 2 + paddingPx + i * lineHeight;
 
                         if (s.outlineSize > 0)
                         {
@@ -1707,15 +1962,42 @@
                     const baseW = 300 * resScale;
                     const w = baseW * obj.scale;
                     const h = (imgEl.naturalHeight / imgEl.naturalWidth) * w;
+                    const cornerRadius = (s.cornerRadius || 0) * resScale;
 
-                    if (s.outlineSize > 0)
+                    const maxPadding = Math.min(w / 2, h / 2);
+                    const innerPadding = Math.min(paddingPx, maxPadding);
+
+                    // Outer border color/size for image, falling back to outline if border not set
+                    const borderColor = s.borderColor || s.outlineColor || '#ffffff';
+                    const borderSize = (s.borderSize && s.borderSize > 0 ? s.borderSize : s.outlineSize || 0) * resScale;
+                    const borderOpacity = (s.borderOpacity != null ? s.borderOpacity : s.outlineOpacity != null ? s.outlineOpacity : 1);
+
+                    // Clip outer rounded rect
+                    ctx.save();
+                    ctx.beginPath();
+                    drawRoundedRect(ctx, -w / 2, -h / 2, w, h, cornerRadius);
+                    ctx.clip();
+
+                    // Inner rect where the image actually draws (padding inside border)
+                    const innerW = w - innerPadding * 2;
+                    const innerH = h - innerPadding * 2;
+                    const innerX = -innerW / 2;
+                    const innerY = -innerH / 2;
+
+                    ctx.drawImage(imgEl, innerX, innerY, innerW, innerH);
+                    ctx.restore();
+
+                    // Outline/border on outer box
+                    if (borderSize > 0)
                     {
-                        ctx.strokeStyle = hexToRgbA(s.outlineColor, s.outlineOpacity);
-                        ctx.lineWidth = (s.outlineSize || 0) * resScale;
-                        ctx.strokeRect(-w / 2, -h / 2, w, h);
+                        ctx.save();
+                        ctx.strokeStyle = hexToRgbA(borderColor, borderOpacity);
+                        ctx.lineWidth = borderSize;
+                        ctx.beginPath();
+                        drawRoundedRect(ctx, -w / 2, -h / 2, w, h, cornerRadius);
+                        ctx.stroke();
+                        ctx.restore();
                     }
-
-                    ctx.drawImage(imgEl, -w / 2, -h / 2, w, h);
                 }
 
                 ctx.restore();
