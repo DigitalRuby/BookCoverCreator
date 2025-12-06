@@ -13,6 +13,7 @@
             --accent-color: #007acc;
             --border-color: #3e3e42;
             --hover-color: #2d2d30;
+            --menu-bg: #2d2d30;
         }
 
         *
@@ -35,7 +36,7 @@
         /* --- Left Sidebar --- */
         .sidebar
         {
-            width: 320px;
+            width: 340px;
             background-color: var(--panel-color);
             border-right: 1px solid var(--border-color);
             padding: 15px;
@@ -44,6 +45,7 @@
             gap: 15px;
             flex-shrink: 0;
             overflow-y: auto;
+            z-index: 10;
         }
 
         h2
@@ -52,6 +54,46 @@
             font-size: 1.1rem;
             color: #fff;
         }
+
+        /* Tabs for Sidebar */
+        .sidebar-section
+        {
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+            .sidebar-section.active
+            {
+                display: flex;
+            }
+
+        .btn-group
+        {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .btn-tool
+        {
+            flex: 1;
+            padding: 8px;
+            background: #333;
+            border: 1px solid var(--border-color);
+            color: white;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+            .btn-tool:hover
+            {
+                background: #444;
+            }
 
         .params-grid
         {
@@ -78,9 +120,11 @@
             font-size: 0.7rem;
             color: #aaa;
             white-space: nowrap;
+            display: flex;
+            justify-content: space-between;
         }
 
-        input[type="number"]
+        input[type="number"], input[type="text"], input[type="color"], select
         {
             background: #3c3c3c;
             border: 1px solid var(--border-color);
@@ -91,11 +135,18 @@
             width: 100%;
         }
 
-            input[type="number"]:focus
+            input[type="number"]:focus, input[type="text"]:focus
             {
                 outline: none;
                 border-color: var(--accent-color);
             }
+
+        input[type="color"]
+        {
+            padding: 0;
+            height: 30px;
+            cursor: pointer;
+        }
 
         input[type=range]
         {
@@ -130,6 +181,8 @@
             margin: 5px 0 0 0;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 5px;
         }
 
         /* --- Drop Zones --- */
@@ -183,11 +236,6 @@
                 background-color: #222;
             }
 
-                .drop-zone.is-template.has-image
-                {
-                    border-color: #007acc;
-                }
-
             .drop-zone p
             {
                 margin: 0;
@@ -207,7 +255,7 @@
 
             .drop-zone .rect-info
             {
-                font-family: 'Consolas', 'Monaco', monospace;
+                font-family: monospace;
                 font-size: 0.75rem;
                 color: #aaa;
                 background: rgba(0,0,0,0.2);
@@ -255,19 +303,215 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            padding: 20px;
-            overflow: auto;
+            padding: 40px;
+            overflow: hidden; /* prevent scrollbars; we aspect-fit via JS */
+            position: relative;
+        }
+
+        /* Canvas Container & Overlays */
+        #canvas-wrapper
+        {
+            position: relative;
+            box-shadow: 0 0 30px rgba(0,0,0,0.7);
+            /* Background checkerboard */
+            background-image: linear-gradient(45deg, #222 25%, transparent 25%), linear-gradient(-45deg, #222 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #222 75%), linear-gradient(-45deg, transparent 75%, #222 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            max-width: 100%;
+            max-height: 100%;
         }
 
         canvas
         {
-            box-shadow: 0 0 30px rgba(0,0,0,0.7);
-            max-width: 95%;
-            max-height: 95%;
-            background-image: linear-gradient(45deg, #222 25%, transparent 25%), linear-gradient(-45deg, #222 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #222 75%), linear-gradient(-45deg, transparent 75%, #222 75%);
-            background-size: 20px 20px;
-            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            display: block;
+            width: 100%;
+            height: 100%; /* fill wrapper, we control wrapper size */
         }
+
+        /* Overlay Items (HTML) */
+        .overlay-item
+        {
+            position: absolute;
+            user-select: none;
+            cursor: grab;
+            border: 1px solid transparent;
+            /* width & height set via JS for text; images auto */
+        }
+
+            .overlay-item:hover
+            {
+                border: 1px dashed rgba(255,255,255,0.3);
+            }
+
+            .overlay-item.selected
+            {
+                border: 1px solid var(--accent-color);
+                z-index: 100;
+            }
+
+        .overlay-content
+        {
+            white-space: normal; /* allow wrapping inside bounds */
+            line-height: 1;
+            transform-origin: center center;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* clip overflowing text */
+            word-break: break-all; /* wrap on all characters */
+            box-sizing: border-box;
+        }
+
+        /* Resize handles for text bounds */
+        .resize-handle
+        {
+            position: absolute;
+            background: transparent;
+        }
+
+        .resize-left,
+        .resize-right
+        {
+            top: 15%;
+            bottom: 15%;
+            width: 8px;
+            cursor: ew-resize;
+        }
+
+        .resize-left
+        {
+            left: -4px;
+        }
+
+        .resize-right
+        {
+            right: -4px;
+        }
+
+        .resize-top,
+        .resize-bottom
+        {
+            left: 15%;
+            right: 15%;
+            height: 8px;
+            cursor: ns-resize;
+        }
+
+        .resize-top
+        {
+            top: -4px;
+        }
+
+        .resize-bottom
+        {
+            bottom: -4px;
+        }
+
+        /* Three Dots Menu Button */
+        .menu-trigger
+        {
+            position: absolute;
+            top: -12px;
+            right: -12px;
+            width: 24px;
+            height: 24px;
+            background: var(--accent-color);
+            border-radius: 50%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            z-index: 101;
+        }
+
+        .overlay-item.selected .menu-trigger
+        {
+            display: flex;
+        }
+
+        .menu-trigger svg
+        {
+            width: 16px;
+            height: 16px;
+            fill: white;
+        }
+
+        /* Popup Menu */
+        .popup-menu
+        {
+            position: absolute;
+            top: 15px;
+            right: -100px;
+            width: 220px;
+            background: var(--menu-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 10px;
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            z-index: 200;
+        }
+
+            .popup-menu.show
+            {
+                display: flex;
+            }
+
+        .popup-row
+        {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+            .popup-row label
+            {
+                width: 50px;
+            }
+
+        .icon-btn-group
+        {
+            display: flex;
+            gap: 4px;
+            background: #222;
+            padding: 2px;
+            border-radius: 4px;
+        }
+
+        .icon-btn
+        {
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border-radius: 3px;
+        }
+
+            .icon-btn:hover
+            {
+                background: #444;
+            }
+
+            .icon-btn.active
+            {
+                background: var(--accent-color);
+            }
+
+            .icon-btn svg
+            {
+                width: 14px;
+                height: 14px;
+                fill: #ccc;
+            }
+
+            .icon-btn.active svg
+            {
+                fill: white;
+            }
 
         button.btn-download
         {
@@ -288,6 +532,18 @@
             {
                 background-color: #0063a5;
             }
+
+        button.btn-back
+        {
+            background: transparent;
+            border: 1px solid #666;
+            color: #ccc;
+            padding: 4px 8px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 10px;
+        }
 
         .loader
         {
@@ -321,83 +577,138 @@
     <input type="file" id="file-back" hidden accept="image/*">
     <input type="file" id="file-spine" hidden accept="image/*">
     <input type="file" id="file-front" hidden accept="image/*">
+    <input type="file" id="file-overlay-img" hidden accept="image/*">
 
     <div class="sidebar">
         <div style="display:flex; align-items:center; justify-content:space-between;">
-            <h2>Cover Parameters</h2>
+            <h2>Cover Creator</h2>
             <div id="render-spinner" class="loader"></div>
         </div>
 
-        <div class="params-grid">
-            <div class="control-group">
-                <label>Width (inches)</label>
-                <input type="number" id="finalWidth" step="0.01">
-            </div>
-            <div class="control-group">
-                <label>Height (inches)</label>
-                <input type="number" id="finalHeight" step="0.01">
-            </div>
-            <div class="control-group full">
-                <label>Spine Width (inches)</label>
-                <input type="number" id="spineWidth" step="0.01">
-            </div>
-            <div class="control-group">
-                <label>Spine Alpha Mult</label>
-                <input type="number" id="spineAlphaMultiplier" step="0.1">
-            </div>
-            <div class="control-group">
-                <label>Spine Alpha Power</label>
-                <input type="number" id="spineAlphaPower" step="0.1">
-            </div>
-
-            <div class="control-group full">
-                <label style="display:flex; justify-content:space-between;">
-                    <span>Artwork Opacity</span>
-                    <span id="opacityVal">75%</span>
-                </label>
-                <input type="range" id="previewAlpha" min="0" max="1" step="0.01">
-            </div>
-        </div>
-
-        <h3>Images</h3>
-        <div class="zones-container">
-            <div class="drop-zone zone-medium is-template" id="dz-template" onclick="triggerFile('file-template')">
-                <p>Background Template</p>
-                <div class="info-block" id="info-template">
-                    <div class="src-info">Default Loaded</div>
+        <div id="panel-layout" class="sidebar-section active">
+            <div class="params-grid">
+                <div class="control-group">
+                    <label>Width (in)</label>
+                    <input type="number" id="finalWidth" step="0.01">
+                </div>
+                <div class="control-group">
+                    <label>Height (in)</label>
+                    <input type="number" id="finalHeight" step="0.01">
+                </div>
+                <div class="control-group full">
+                    <label>Spine Width (in)</label>
+                    <input type="number" id="spineWidth" step="0.01">
+                </div>
+                <div class="control-group">
+                    <label>Spine Shade</label>
+                    <input type="number" id="spineAlphaMultiplier" step="0.1">
+                </div>
+                <div class="control-group">
+                    <label>Shade Curve</label>
+                    <input type="number" id="spineAlphaPower" step="0.1">
+                </div>
+                <div class="control-group full">
+                    <label><span>Opacity</span><span id="opacityVal">75%</span></label>
+                    <input type="range" id="previewAlpha" min="0" max="1" step="0.01">
                 </div>
             </div>
 
-            <div class="drop-zone zone-large" id="dz-back" onclick="triggerFile('file-back')">
-                <p>Back Cover</p>
-                <div class="info-block" id="info-back"></div>
-            </div>
-            <div class="offset-control">
-                <div class="offset-label"><span>Back Offset</span><span id="lbl-backOffset">0%</span></div>
-                <input type="range" id="backOffset" min="-25" max="25" step="1" value="0">
+            <h3>Base Layers</h3>
+            <div class="zones-container">
+                <div class="drop-zone zone-medium is-template" id="dz-template" onclick="triggerFile('file-template')">
+                    <p>Background Template</p>
+                    <div class="info-block" id="info-template"><div class="src-info">Default Loaded</div></div>
+                </div>
+                <div class="drop-zone zone-large" id="dz-back" onclick="triggerFile('file-back')">
+                    <p>Back Cover</p>
+                    <div class="info-block" id="info-back"></div>
+                </div>
+                <div class="offset-control">
+                    <div class="offset-label"><span>Offset</span><span id="lbl-backOffset">0%</span></div>
+                    <input type="range" id="backOffset" min="-25" max="25" step="1" value="0">
+                </div>
+                <div class="drop-zone zone-medium" id="dz-spine" onclick="triggerFile('file-spine')">
+                    <p>Spine</p>
+                    <div class="info-block" id="info-spine"></div>
+                </div>
+                <div class="drop-zone zone-large" id="dz-front" onclick="triggerFile('file-front')">
+                    <p>Front Cover</p>
+                    <div class="info-block" id="info-front"></div>
+                </div>
+                <div class="offset-control">
+                    <div class="offset-label"><span>Offset</span><span id="lbl-frontOffset">0%</span></div>
+                    <input type="range" id="frontOffset" min="-25" max="25" step="1" value="0">
+                </div>
             </div>
 
-            <div class="drop-zone zone-medium" id="dz-spine" onclick="triggerFile('file-spine')">
-                <p>Spine</p>
-                <div class="info-block" id="info-spine"></div>
+            <div class="btn-group">
+                <div class="btn-tool" onclick="addTextOverlay()">+ Add Text</div>
+                <div class="btn-tool" onclick="document.getElementById('file-overlay-img').click()">+ Add Image</div>
             </div>
 
-            <div class="drop-zone zone-large" id="dz-front" onclick="triggerFile('file-front')">
-                <p>Front Cover</p>
-                <div class="info-block" id="info-front"></div>
-            </div>
-            <div class="offset-control">
-                <div class="offset-label"><span>Front Offset</span><span id="lbl-frontOffset">0%</span></div>
-                <input type="range" id="frontOffset" min="-25" max="25" step="1" value="0">
-            </div>
+            <button class="btn-download" onclick="downloadCanvas()">Download JPG</button>
         </div>
 
-        <button class="btn-download" onclick="downloadCanvas()">Download JPG</button>
+        <div id="panel-overlay" class="sidebar-section">
+            <button class="btn-back" onclick="deselectOverlay()">&larr; Back to Layout</button>
+            <h3 id="overlay-title">Text Properties</h3>
+
+            <div class="control-group" id="group-text-content">
+                <label>Text Content</label>
+                <input type="text" id="prop-text-content">
+            </div>
+
+            <h3>Outline / Stroke</h3>
+            <div class="params-grid">
+                <div class="control-group">
+                    <label>Color</label>
+                    <input type="color" id="prop-outline-color" value="#000000">
+                </div>
+                <div class="control-group">
+                    <label>Size</label>
+                    <input type="number" id="prop-outline-size" step="0.5" min="0">
+                </div>
+                <div class="control-group full">
+                    <label>Opacity</label>
+                    <input type="range" id="prop-outline-opacity" min="0" max="1" step="0.1">
+                </div>
+            </div>
+
+            <h3>Shadow</h3>
+            <div class="params-grid">
+                <div class="control-group">
+                    <label>Color</label>
+                    <input type="color" id="prop-shadow-color" value="#000000">
+                </div>
+                <div class="control-group">
+                    <label>Blur/Size</label>
+                    <input type="number" id="prop-shadow-size" step="1" min="0">
+                </div>
+                <div class="control-group full">
+                    <label>Opacity</label>
+                    <input type="range" id="prop-shadow-opacity" min="0" max="1" step="0.1">
+                </div>
+            </div>
+
+            <div style="margin-top:20px;">
+                <button class="btn-tool" style="background:#a32323; border:none; width:100%;" onclick="deleteSelectedOverlay()">Delete Item</button>
+            </div>
+        </div>
     </div>
 
-    <div class="main-area">
-        <canvas id="previewCanvas"></canvas>
+    <div class="main-area" id="main-area">
+        <div id="canvas-wrapper">
+            <canvas id="previewCanvas"></canvas>
+        </div>
     </div>
+
+    <svg style="display:none">
+        <symbol id="icon-dots" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" /></symbol>
+        <symbol id="icon-left" viewBox="0 0 24 24"><path d="M3 15h18v-2H3v2zm0 4h12v-2H3v2zm0-8h18V9H3v2zm0-6v2h18V5H3z" /></symbol>
+        <symbol id="icon-center" viewBox="0 0 24 24"><path d="M7 15v2h10v-2H7zm-4 6h18v-2H3v2zm0-8h18v-2H3v2zm4-6v2h10V7H7zM3 3v2h18V3H3z" /></symbol>
+        <symbol id="icon-right" viewBox="0 0 24 24"><path d="M3 21h18v-2H3v2zm6-4h12v-2H9v2zm-6-4h18V9H3v2zm6-6v2h12V5H9z" /></symbol>
+        <symbol id="icon-full" viewBox="0 0 24 24"><path d="M3 21h18v-2H3v2zm0-4h18v-2H3v2zm0-4h18V9H3v2zm0-4h18V5H3v2zm0-4v2h18V3H3z" /></symbol>
+    </svg>
 
     <script>
         const DPI = 300;
@@ -405,21 +716,18 @@
 
         // --- State ---
         const defaultParams = {
-            width: 4065,
-            height: 2775,
-            spineWidth: 390,
-            alphaMult: 2.0,
-            alphaPower: 1.0,
-            previewAlpha: 0.75,
-            frontOffset: 0,
-            backOffset: 0
+            width: 4065, height: 2775, spineWidth: 390,
+            alphaMult: 2.0, alphaPower: 1.0, previewAlpha: 0.75,
+            frontOffset: 0, backOffset: 0
         };
 
         let savedParams = localStorage.getItem('coverParams');
         let params = savedParams ? JSON.parse(savedParams) : defaultParams;
         if (typeof params.previewAlpha === 'undefined') params.previewAlpha = 0.75;
-        if (typeof params.frontOffset === 'undefined') params.frontOffset = 0;
-        if (typeof params.backOffset === 'undefined') params.backOffset = 0;
+
+        // Overlays array
+        let overlays = [];
+        let selectedOverlayId = null;
 
         const state = {
             params: params,
@@ -427,12 +735,10 @@
             images: { template: null, front: null, back: null, spine: null }
         };
 
-        // --- CACHE ---
-        // We render the spine HERE once, and reuse it until spine parameters change.
+        // --- CACHE & DOM ---
         let spineCacheCanvas = document.createElement('canvas');
         let isSpineCacheDirty = true;
 
-        // --- DOM ---
         const dom = {
             width: document.getElementById('finalWidth'),
             height: document.getElementById('finalHeight'),
@@ -442,15 +748,27 @@
             pAlpha: document.getElementById('previewAlpha'),
             pAlphaVal: document.getElementById('opacityVal'),
             canvas: document.getElementById('previewCanvas'),
+            canvasWrapper: document.getElementById('canvas-wrapper'),
             spinner: document.getElementById('render-spinner'),
-
             frontOff: document.getElementById('frontOffset'),
             backOff: document.getElementById('backOffset'),
-            frontOffLbl: document.getElementById('lbl-frontOffset'),
-            backOffLbl: document.getElementById('lbl-backOffset')
+            mainArea: document.getElementById('main-area'),
+
+            // Panels
+            panelLayout: document.getElementById('panel-layout'),
+            panelOverlay: document.getElementById('panel-overlay'),
+
+            // Property Inputs
+            propText: document.getElementById('prop-text-content'),
+            propOutColor: document.getElementById('prop-outline-color'),
+            propOutSize: document.getElementById('prop-outline-size'),
+            propOutOp: document.getElementById('prop-outline-opacity'),
+            propShadColor: document.getElementById('prop-shadow-color'),
+            propShadSize: document.getElementById('prop-shadow-size'),
+            propShadOp: document.getElementById('prop-shadow-opacity'),
         };
 
-        // Init UI
+        // Init UI Inputs
         dom.width.value = (state.params.width / DPI).toFixed(2);
         dom.height.value = (state.params.height / DPI).toFixed(2);
         dom.spineW.value = (state.params.spineWidth / DPI).toFixed(2);
@@ -460,20 +778,14 @@
         dom.pAlphaVal.textContent = Math.round(state.params.previewAlpha * 100) + "%";
         dom.frontOff.value = state.params.frontOffset;
         dom.backOff.value = state.params.backOffset;
-        dom.frontOffLbl.textContent = state.params.frontOffset + "%";
-        dom.backOffLbl.textContent = state.params.backOffset + "%";
 
-        const ctx = dom.canvas.getContext('2d', { willReadFrequently: true });
-
-        // --- Debounce ---
+        // --- Event Listeners (Layout) ---
         let debounceTimer;
         function scheduleUpdate(action, isHeavy)
         {
             dom.spinner.style.display = "block";
             if (debounceTimer) clearTimeout(debounceTimer);
-
-            const delay = isHeavy ? RENDER_DELAY_MS : 30; // 30ms for sliders = smooth
-
+            const delay = isHeavy ? RENDER_DELAY_MS : 30;
             debounceTimer = setTimeout(() =>
             {
                 action();
@@ -481,9 +793,7 @@
             }, delay);
         }
 
-        // --- Inputs ---
-
-        // 1. Heavy Inputs (Dimensions) - Invalidate Cache
+        // Standard Dimension inputs
         ['finalWidth', 'finalHeight', 'spineWidth'].forEach(id =>
         {
             document.getElementById(id).addEventListener('input', (e) =>
@@ -494,7 +804,7 @@
                 {
                     state.params[key] = Math.round(val * DPI);
                     saveState();
-                    isSpineCacheDirty = true; // Dimensions changed
+                    isSpineCacheDirty = true;
                     scheduleUpdate(() =>
                     {
                         updateLabels();
@@ -505,45 +815,37 @@
             });
         });
 
-        // 2. Heavy Inputs (Alpha Calc) - Invalidate Cache
-        ['spineAlphaMultiplier', 'spineAlphaPower'].forEach(id =>
+        // Other Inputs
+        [['spineAlphaMultiplier', 'alphaMult'], ['spineAlphaPower', 'alphaPower']].forEach(([id, key]) =>
         {
             document.getElementById(id).addEventListener('input', (e) =>
             {
-                const val = parseFloat(e.target.value);
-                const key = id === 'spineAlphaMultiplier' ? 'alphaMult' : 'alphaPower';
-                if (!isNaN(val))
-                {
-                    state.params[key] = val;
-                    saveState();
-                    isSpineCacheDirty = true; // Alpha calc changed
-                    scheduleUpdate(() => requestRender(), true);
-                }
+                state.params[key] = parseFloat(e.target.value);
+                saveState();
+                isSpineCacheDirty = true;
+                scheduleUpdate(() => requestRender(), true);
             });
         });
 
-        // 3. Fast Inputs (Offsets) - NO Cache Invalidation needed
-        dom.frontOff.addEventListener('input', (e) =>
-        {
-            state.params.frontOffset = parseInt(e.target.value);
-            dom.frontOffLbl.textContent = state.params.frontOffset + "%";
-            saveState();
-            scheduleUpdate(() => requestRender(), false);
-        });
-
-        dom.backOff.addEventListener('input', (e) =>
-        {
-            state.params.backOffset = parseInt(e.target.value);
-            dom.backOffLbl.textContent = state.params.backOffset + "%";
-            saveState();
-            scheduleUpdate(() => requestRender(), false);
-        });
-
-        // 4. Fast Input (Opacity)
         dom.pAlpha.addEventListener('input', (e) =>
         {
             state.params.previewAlpha = parseFloat(e.target.value);
             dom.pAlphaVal.textContent = Math.round(state.params.previewAlpha * 100) + "%";
+            saveState();
+            scheduleUpdate(() => requestRender(), false);
+        });
+
+        dom.frontOff.addEventListener('input', (e) =>
+        {
+            state.params.frontOffset = parseInt(e.target.value);
+            document.getElementById('lbl-frontOffset').textContent = state.params.frontOffset + "%";
+            saveState();
+            scheduleUpdate(() => requestRender(), false);
+        });
+        dom.backOff.addEventListener('input', (e) =>
+        {
+            state.params.backOffset = parseInt(e.target.value);
+            document.getElementById('lbl-backOffset').textContent = state.params.backOffset + "%";
             saveState();
             scheduleUpdate(() => requestRender(), false);
         });
@@ -553,14 +855,13 @@
             localStorage.setItem('coverParams', JSON.stringify(state.params));
         }
 
-        // --- File Handling ---
+        // --- File Handlers ---
         window.triggerFile = function (id) { document.getElementById(id).click(); };
 
         function setupImageHandler(zoneId, fileInputId, imageKey, infoId)
         {
             const zone = document.getElementById(zoneId);
             const fileInput = document.getElementById(fileInputId);
-
             const handleFile = (file) =>
             {
                 if (file && file.type.startsWith('image/'))
@@ -577,9 +878,7 @@
                                 state.isCustomTemplate = true;
                                 zone.classList.remove('is-template');
                             }
-                            // If spine image changed, cache is dirty
                             if (imageKey === 'spine') isSpineCacheDirty = true;
-
                             zone.classList.add('has-image');
                             updateLabels();
                             requestRender();
@@ -589,15 +888,13 @@
                     reader.readAsDataURL(file);
                 }
             };
-
             fileInput.addEventListener('change', (e) => handleFile(e.target.files[0]));
-            zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('active'); });
-            zone.addEventListener('dragleave', (e) => { e.preventDefault(); zone.classList.remove('active'); });
-            zone.addEventListener('drop', (e) =>
+            if (zone)
             {
-                e.preventDefault(); zone.classList.remove('active');
-                handleFile(e.dataTransfer.files[0]);
-            });
+                zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('active'); });
+                zone.addEventListener('dragleave', (e) => { e.preventDefault(); zone.classList.remove('active'); });
+                zone.addEventListener('drop', (e) => { e.preventDefault(); zone.classList.remove('active'); handleFile(e.dataTransfer.files[0]); });
+            }
         }
 
         setupImageHandler('dz-template', 'file-template', 'template', 'info-template');
@@ -605,7 +902,557 @@
         setupImageHandler('dz-front', 'file-front', 'front', 'info-front');
         setupImageHandler('dz-spine', 'file-spine', 'spine', 'info-spine');
 
-        // --- Render ---
+        // --- OVERLAY SYSTEM ---
+
+        document.getElementById('file-overlay-img').addEventListener('change', (e) =>
+        {
+            const file = e.target.files[0];
+            if (file)
+            {
+                const reader = new FileReader();
+                reader.onload = (evt) =>
+                {
+                    addImageOverlay(evt.target.result);
+                }
+                reader.readAsDataURL(file);
+            }
+            e.target.value = ''; // reset
+        });
+
+        function createOverlayObject(type, content)
+        {
+            return {
+                id: Date.now() + Math.random().toString(),
+                type: type, // 'text' or 'image'
+                content: content, // text string or dataURL
+                x: 50, y: 50, // Percentages (top-left)
+                scale: 1,
+                fontScale: 1, // used only for text
+                rotation: 0,
+                align: 'left', // default to left align
+                fontFamily: 'Arial',
+                boundsWidthPct: 30,  // width of the text box as % of canvas-wrapper
+                boundsHeightPct: 10, // height of the text box as % of canvas-wrapper
+                style: {
+                    outlineColor: '#000000', outlineSize: 0, outlineOpacity: 1,
+                    shadowColor: '#000000', shadowSize: 0, shadowOpacity: 1
+                }
+            };
+        }
+
+        function addTextOverlay()
+        {
+            const obj = createOverlayObject('text', 'New Text');
+            obj.style.outlineSize = 0; // Default text usually no outline
+            overlays.push(obj);
+            renderDomOverlays();
+            selectOverlay(obj.id);
+        }
+
+        function addImageOverlay(src)
+        {
+            const obj = createOverlayObject('image', src);
+            // For images, boundsWidthPct / boundsHeightPct are not used
+            obj.boundsWidthPct = null;
+            obj.boundsHeightPct = null;
+            overlays.push(obj);
+            renderDomOverlays();
+            selectOverlay(obj.id);
+        }
+
+        function deleteSelectedOverlay()
+        {
+            if (selectedOverlayId)
+            {
+                overlays = overlays.filter(o => o.id !== selectedOverlayId);
+                deselectOverlay();
+                renderDomOverlays();
+            }
+        }
+
+        function selectOverlay(id)
+        {
+            selectedOverlayId = id;
+
+            // Switch Sidebar
+            dom.panelLayout.classList.remove('active');
+            dom.panelOverlay.classList.add('active');
+
+            // Sync values
+            const obj = overlays.find(o => o.id === id);
+            if (!obj) return;
+
+            const isText = obj.type === 'text';
+            document.getElementById('overlay-title').textContent = isText ? "Text Properties" : "Image Properties";
+            document.getElementById('group-text-content').style.display = isText ? 'flex' : 'none';
+
+            if (isText) dom.propText.value = obj.content;
+
+            dom.propOutColor.value = obj.style.outlineColor;
+            dom.propOutSize.value = obj.style.outlineSize;
+            dom.propOutOp.value = obj.style.outlineOpacity;
+
+            dom.propShadColor.value = obj.style.shadowColor;
+            dom.propShadSize.value = obj.style.shadowSize;
+            dom.propShadOp.value = obj.style.shadowOpacity;
+
+            // Highlight DOM
+            document.querySelectorAll('.overlay-item').forEach(el => el.classList.remove('selected'));
+            const el = document.getElementById('ov-' + id);
+            if (el) el.classList.add('selected');
+        }
+
+        function deselectOverlay()
+        {
+            selectedOverlayId = null;
+            document.querySelectorAll('.overlay-item').forEach(el => el.classList.remove('selected'));
+            document.querySelectorAll('.popup-menu').forEach(el => el.classList.remove('show'));
+            dom.panelOverlay.classList.remove('active');
+            dom.panelLayout.classList.add('active');
+        }
+
+        // Property listeners
+        dom.propText.addEventListener('input', e => updateSelectedProp('content', e.target.value));
+        dom.propOutColor.addEventListener('input', e => updateSelectedStyle('outlineColor', e.target.value));
+        dom.propOutSize.addEventListener('input', e => updateSelectedStyle('outlineSize', parseFloat(e.target.value)));
+        dom.propOutOp.addEventListener('input', e => updateSelectedStyle('outlineOpacity', parseFloat(e.target.value)));
+        dom.propShadColor.addEventListener('input', e => updateSelectedStyle('shadowColor', e.target.value));
+        dom.propShadSize.addEventListener('input', e => updateSelectedStyle('shadowSize', parseFloat(e.target.value)));
+        dom.propShadOp.addEventListener('input', e => updateSelectedStyle('shadowOpacity', parseFloat(e.target.value)));
+
+        function updateSelectedProp(key, val)
+        {
+            if (!selectedOverlayId) return;
+            const obj = overlays.find(o => o.id === selectedOverlayId);
+            if (obj)
+            {
+                obj[key] = val;
+
+                // Update DOM text content immediately so preview reflects changes
+                const el = document.getElementById('ov-' + obj.id);
+                if (el)
+                {
+                    const contentDiv = el.querySelector('.overlay-content');
+                    if (obj.type === 'text' && contentDiv)
+                    {
+                        contentDiv.textContent = obj.content;
+                    }
+                }
+
+                updateDomOverlayStyle(obj);
+            }
+        }
+        function updateSelectedStyle(key, val)
+        {
+            if (!selectedOverlayId) return;
+            const obj = overlays.find(o => o.id === selectedOverlayId);
+            if (obj)
+            {
+                obj.style[key] = val;
+                updateDomOverlayStyle(obj);
+            }
+        }
+
+        // --- DOM RENDERER FOR OVERLAYS ---
+        function renderDomOverlays()
+        {
+            // Remove missing
+            const currentIds = overlays.map(o => 'ov-' + o.id);
+            document.querySelectorAll('.overlay-item').forEach(el =>
+            {
+                if (!currentIds.includes(el.id)) el.remove();
+            });
+
+            overlays.forEach(obj =>
+            {
+                let el = document.getElementById('ov-' + obj.id);
+                if (!el)
+                {
+                    el = document.createElement('div');
+                    el.id = 'ov-' + obj.id;
+                    el.className = 'overlay-item';
+                    el.addEventListener('mousedown', (e) => handleDragStart(e, obj.id));
+
+                    // Trigger Button
+                    const trig = document.createElement('div');
+                    trig.className = 'menu-trigger';
+                    trig.innerHTML = '<svg><use href="#icon-dots"/></svg>';
+                    trig.onclick = (e) => { e.stopPropagation(); toggleMenu(obj.id); };
+                    el.appendChild(trig);
+
+                    // Popup Menu
+                    const menu = document.createElement('div');
+                    menu.className = 'popup-menu';
+                    menu.id = 'menu-' + obj.id;
+                    menu.innerHTML = generateMenuHTML(obj);
+                    el.appendChild(menu);
+
+                    // Content
+                    const contentDiv = document.createElement('div');
+                    contentDiv.className = 'overlay-content';
+                    el.appendChild(contentDiv);
+
+                    dom.canvasWrapper.appendChild(el);
+                }
+
+                const contentDiv = el.querySelector('.overlay-content');
+
+                if (obj.type === 'text')
+                {
+                    // Ensure resize handles exist (horizontal + vertical)
+                    ['left', 'right', 'top', 'bottom'].forEach(side =>
+                    {
+                        if (!el.querySelector('.resize-' + side))
+                        {
+                            const h = document.createElement('div');
+                            h.className = 'resize-handle resize-' + side;
+                            h.addEventListener('mousedown', (e) => startResize(e, obj.id, side));
+                            el.appendChild(h);
+                        }
+                    });
+
+                    contentDiv.textContent = obj.content;
+                } else
+                {
+                    // Images: no text resize handles
+                    const existingHandles = el.querySelectorAll('.resize-handle');
+                    existingHandles.forEach(h => h.remove());
+
+                    if (!contentDiv.querySelector('img'))
+                    {
+                        const img = document.createElement('img');
+                        img.draggable = false;
+                        img.style.display = 'block';
+                        img.style.pointerEvents = 'none';
+                        contentDiv.appendChild(img);
+                    }
+                    contentDiv.querySelector('img').src = obj.content;
+                }
+
+                updateDomOverlayStyle(obj);
+            });
+        }
+
+        function generateMenuHTML(obj)
+        {
+            let html = '';
+
+            // Rotation
+            html += `<div class="popup-row"><label>Rot</label><input type="range" min="0" max="360" value="${obj.rotation}" oninput="updateTransform('${obj.id}', 'rotation', this.value)"></div>`;
+
+            // Scale => for text: font size, for image: visual scale
+            html += `<div class="popup-row"><label>Scale</label><input type="range" min="0.1" max="3" step="0.1" value="${obj.type === 'text' ? obj.fontScale : obj.scale}" oninput="updateTransform('${obj.id}', 'scale', this.value)"></div>`;
+
+            if (obj.type === 'text')
+            {
+                // Font
+                html += `<div class="popup-row"><label>Font</label><select onchange="updateTransform('${obj.id}', 'fontFamily', this.value)">
+                                <option value="Arial" ${obj.fontFamily == 'Arial' ? 'selected' : ''}>Arial</option>
+                                <option value="'Times New Roman'" ${obj.fontFamily == "'Times New Roman'" ? 'selected' : ''}>Times</option>
+                                <option value="'Courier New'" ${obj.fontFamily == "'Courier New'" ? 'selected' : ''}>Courier</option>
+                                <option value="Georgia" ${obj.fontFamily == 'Georgia' ? 'selected' : ''}>Georgia</option>
+                                <option value="Verdana" ${obj.fontFamily == 'Verdana' ? 'selected' : ''}>Verdana</option>
+                                <option value="Impact" ${obj.fontFamily == 'Impact' ? 'selected' : ''}>Impact</option>
+                            </select></div>`;
+
+                // Align
+                html += `<div class="popup-row"><label>Align</label><div class="icon-btn-group">
+                                <div class="icon-btn ${obj.align == 'left' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'left')"><svg><use href="#icon-left"/></svg></div>
+                                <div class="icon-btn ${obj.align == 'center' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'center')"><svg><use href="#icon-center"/></svg></div>
+                                <div class="icon-btn ${obj.align == 'right' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'right')"><svg><use href="#icon-right"/></svg></div>
+                                <div class="icon-btn ${obj.align == 'justify' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'justify')"><svg><use href="#icon-full"/></svg></div>
+                            </div></div>`;
+            }
+            return html;
+        }
+
+        window.updateTransform = function (id, key, val)
+        {
+            const obj = overlays.find(o => o.id === id);
+            if (obj)
+            {
+                if (key === 'scale')
+                {
+                    if (obj.type === 'text')
+                    {
+                        obj.fontScale = parseFloat(val);
+                    } else
+                    {
+                        obj.scale = parseFloat(val);
+                    }
+                }
+                else if (key === 'rotation')
+                {
+                    obj.rotation = parseFloat(val);
+                }
+                else
+                {
+                    obj[key] = val;
+                }
+
+                // Update menu HTML if align changed (to update active class)
+                if (key === 'align')
+                {
+                    document.getElementById('menu-' + id).innerHTML = generateMenuHTML(obj);
+                }
+                updateDomOverlayStyle(obj);
+            }
+        };
+
+        function toggleMenu(id)
+        {
+            const m = document.getElementById('menu-' + id);
+            const wasShow = m.classList.contains('show');
+            document.querySelectorAll('.popup-menu').forEach(el => el.classList.remove('show'));
+            if (!wasShow) m.classList.add('show');
+        }
+
+        function updateDomOverlayStyle(obj)
+        {
+            const el = document.getElementById('ov-' + obj.id);
+            if (!el) return;
+            const content = el.querySelector('.overlay-content');
+            const img = content.querySelector('img');
+
+            // Ensure boundsHeightPct is present for text
+            if (obj.type === 'text' && (!obj.boundsHeightPct || obj.boundsHeightPct <= 0))
+            {
+                obj.boundsHeightPct = 10;
+            }
+
+            // Position (Percentages - top-left)
+            el.style.left = obj.x + '%';
+            el.style.top = obj.y + '%';
+
+            // Bounds width/height for text box
+            if (obj.type === 'text' && obj.boundsWidthPct)
+            {
+                el.style.width = obj.boundsWidthPct + '%';
+            } else
+            {
+                el.style.width = 'auto';
+            }
+
+            if (obj.type === 'text' && obj.boundsHeightPct)
+            {
+                el.style.height = obj.boundsHeightPct + '%';
+            } else
+            {
+                el.style.height = 'auto';
+            }
+
+            // Transform
+            if (obj.type === 'image')
+            {
+                content.style.transform = `rotate(${obj.rotation}deg) scale(${obj.scale})`;
+            } else
+            {
+                // text: rotation only; fontScale controls font size
+                content.style.transform = `rotate(${obj.rotation}deg)`;
+            }
+
+            // Visuals
+            const s = obj.style;
+            const hexToRgbA = (hex, alpha) =>
+            {
+                let c = hex.substring(1).split('');
+                if (c.length == 3) c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+                c = '0x' + c.join('');
+                return 'rgba(' + [(c >> 16) & 255, (c >> 8) & 255, c & 255].join(',') + ',' + alpha + ')';
+            };
+
+            const shadowStr = `drop-shadow(0px 0px ${s.shadowSize}px ${hexToRgbA(s.shadowColor, s.shadowOpacity)})`;
+
+            if (obj.type === 'text')
+            {
+                content.style.fontFamily = obj.fontFamily;
+                const basePx = 50;
+                content.style.fontSize = (basePx * obj.fontScale) + "px";
+                content.style.color = "#FFFFFF";
+                content.style.textAlign = obj.align;
+
+                // Text Outline
+                if (s.outlineSize > 0)
+                {
+                    content.style.webkitTextStroke = `${s.outlineSize}px ${hexToRgbA(s.outlineColor, s.outlineOpacity)}`;
+                } else
+                {
+                    content.style.webkitTextStroke = '0';
+                }
+
+                // Text Shadow
+                content.style.filter = shadowStr;
+
+            } else if (img)
+            {
+                // Image Outline (Border)
+                if (s.outlineSize > 0)
+                {
+                    img.style.border = `${s.outlineSize}px solid ${hexToRgbA(s.outlineColor, s.outlineOpacity)}`;
+                } else
+                {
+                    img.style.border = 'none';
+                }
+
+                // Image Shadow
+                img.style.filter = shadowStr;
+                img.style.width = "300px"; // Base width
+            }
+        }
+
+        // --- DRAG & RESIZE LOGIC ---
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+        let activeDragId = null;
+
+        let isResizing = false;
+        let resizeData = null;
+
+        function handleDragStart(e, id)
+        {
+            // If clicking input/select in menu or resize handle, don't drag
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'LABEL' || e.target.closest('.popup-menu') || e.target.classList.contains('resize-handle')) return;
+
+            isDragging = true;
+            activeDragId = id;
+            selectOverlay(id);
+
+            const el = document.getElementById('ov-' + id);
+            const rect = el.getBoundingClientRect();
+            dragOffset.x = e.clientX - rect.left;
+            dragOffset.y = e.clientY - rect.top;
+
+            e.stopPropagation();
+        }
+
+        function startResize(e, id, side)
+        {
+            e.stopPropagation();
+            isResizing = true;
+            resizeData = {
+                id,
+                side,
+                startX: e.clientX,
+                startY: e.clientY
+            };
+            selectOverlay(id);
+        }
+
+        document.addEventListener('mousemove', (e) =>
+        {
+            if (isDragging && activeDragId)
+            {
+                const wrapperRect = dom.canvasWrapper.getBoundingClientRect();
+                const x = e.clientX - wrapperRect.left - dragOffset.x;
+                const y = e.clientY - wrapperRect.top - dragOffset.y;
+
+                const obj = overlays.find(o => o.id === activeDragId);
+                obj.x = (x / wrapperRect.width) * 100;
+                obj.y = (y / wrapperRect.height) * 100;
+
+                updateDomOverlayStyle(obj);
+            }
+            else if (isResizing && resizeData)
+            {
+                const obj = overlays.find(o => o.id === resizeData.id);
+                if (!obj || obj.type !== 'text') return;
+
+                const el = document.getElementById('ov-' + obj.id);
+                const wrapperRect = dom.canvasWrapper.getBoundingClientRect();
+                const rect = el.getBoundingClientRect();
+
+                const side = resizeData.side;
+
+                // Horizontal (left/right) resize
+                if (side === 'left' || side === 'right')
+                {
+                    const deltaX = e.clientX - resizeData.startX;
+
+                    let newLeft = rect.left;
+                    let newRight = rect.right;
+
+                    if (side === 'right')
+                    {
+                        newRight = rect.right + deltaX;
+                    }
+                    else if (side === 'left')
+                    {
+                        newLeft = rect.left + deltaX;
+                    }
+
+                    let newWidthPx = newRight - newLeft;
+                    const minWidthPx = 40;
+                    if (newWidthPx < minWidthPx)
+                    {
+                        newWidthPx = minWidthPx;
+                    }
+
+                    const widthPct = (newWidthPx / wrapperRect.width) * 100;
+                    const leftPct = ((newLeft - wrapperRect.left) / wrapperRect.width) * 100;
+
+                    obj.boundsWidthPct = Math.max(5, Math.min(100, widthPct));
+                    obj.x = Math.max(0, Math.min(100 - obj.boundsWidthPct, leftPct));
+
+                    resizeData.startX = e.clientX;
+                }
+
+                // Vertical (top/bottom) resize
+                if (side === 'top' || side === 'bottom')
+                {
+                    const deltaY = e.clientY - resizeData.startY;
+
+                    let newTop = rect.top;
+                    let newBottom = rect.bottom;
+
+                    if (side === 'bottom')
+                    {
+                        newBottom = rect.bottom + deltaY;
+                    }
+                    else if (side === 'top')
+                    {
+                        newTop = rect.top + deltaY;
+                    }
+
+                    let newHeightPx = newBottom - newTop;
+                    const minHeightPx = 30;
+                    if (newHeightPx < minHeightPx)
+                    {
+                        newHeightPx = minHeightPx;
+                    }
+
+                    const heightPct = (newHeightPx / wrapperRect.height) * 100;
+                    const topPct = ((newTop - wrapperRect.top) / wrapperRect.height) * 100;
+
+                    obj.boundsHeightPct = Math.max(3, Math.min(100, heightPct));
+                    obj.y = Math.max(0, Math.min(100 - obj.boundsHeightPct, topPct));
+
+                    resizeData.startY = e.clientY;
+                }
+
+                updateDomOverlayStyle(obj);
+            }
+        });
+
+        document.addEventListener('mouseup', () =>
+        {
+            isDragging = false;
+            activeDragId = null;
+            isResizing = false;
+            resizeData = null;
+        });
+
+        // Deselect if clicking blank area
+        dom.canvasWrapper.addEventListener('mousedown', (e) =>
+        {
+            if (e.target.id === 'previewCanvas' || e.target.id === 'canvas-wrapper')
+            {
+                deselectOverlay();
+            }
+        });
+
+
+        // --- RENDERING (Existing logic + Overlay Injection) ---
+
         function calculateGeometry()
         {
             const p = state.params;
@@ -622,8 +1469,35 @@
             };
         }
 
+        function updateCanvasWrapperSize()
+        {
+            const geo = calculateGeometry();
+            const coverW = geo.final.w;
+            const coverH = geo.final.h;
+
+            const mainRect = dom.mainArea.getBoundingClientRect();
+            // main-area padding is 40px all around
+            const paddingX = 80;
+            const paddingY = 80;
+
+            const availW = Math.max(10, mainRect.width - paddingX);
+            const availH = Math.max(10, mainRect.height - paddingY);
+
+            const scale = Math.min(availW / coverW, availH / coverH);
+
+            const displayW = coverW * scale;
+            const displayH = coverH * scale;
+
+            dom.canvasWrapper.style.width = displayW + 'px';
+            dom.canvasWrapper.style.height = displayH + 'px';
+
+            dom.canvas.style.width = '100%';
+            dom.canvas.style.height = '100%';
+        }
+
         function requestRender()
         {
+            updateCanvasWrapperSize();
             renderToCanvas(dom.canvas, false);
         }
 
@@ -631,12 +1505,7 @@
         {
             const geo = calculateGeometry();
 
-            // Check if we need to rebuild the spine cache
-            if (isSpineCacheDirty)
-            {
-                updateSpineCache(geo.spine);
-                isSpineCacheDirty = false;
-            }
+            if (isSpineCacheDirty) { updateSpineCache(geo.spine); isSpineCacheDirty = false; }
 
             if (targetCanvas.width !== geo.final.w || targetCanvas.height !== geo.final.h)
             {
@@ -646,96 +1515,254 @@
             const ctx = targetCanvas.getContext('2d');
             ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
 
+            // Base Template
             if (!isExport && state.images.template)
             {
                 ctx.drawImage(state.images.template, 0, 0, geo.final.w, geo.final.h);
             }
 
+            // Composite Layer
             const offCanvas = document.createElement('canvas');
             offCanvas.width = geo.final.w; offCanvas.height = geo.final.h;
             const oCtx = offCanvas.getContext('2d');
-
             drawCompositeLayer(oCtx, geo);
 
             ctx.save();
             if (!isExport) ctx.globalAlpha = state.params.previewAlpha;
             ctx.drawImage(offCanvas, 0, 0);
             ctx.restore();
+
+            // Render Overlays (Burn in)
+            if (isExport)
+            {
+                renderOverlaysToContext(ctx, geo.final.w, geo.final.h);
+            }
+        }
+
+        function renderOverlaysToContext(ctx, width, height)
+        {
+            const wrapperRect = dom.canvasWrapper.getBoundingClientRect();
+
+            overlays.forEach(obj =>
+            {
+                const el = document.getElementById('ov-' + obj.id);
+                if (!el) return;
+
+                const s = obj.style;
+                const hexToRgbA = (hex, alpha) =>
+                {
+                    let c = hex.substring(1).split('');
+                    if (c.length == 3) c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+                    c = '0x' + c.join('');
+                    return `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${alpha})`;
+                };
+
+                const domW = wrapperRect.width || 1000;
+                const resScale = width / domW;
+
+                let centerX, centerY;
+                let boxW = null, boxH = null;
+
+                if (obj.type === 'text' && obj.boundsWidthPct && obj.boundsHeightPct)
+                {
+                    boxW = width * (obj.boundsWidthPct / 100);
+                    boxH = height * (obj.boundsHeightPct / 100);
+                    centerX = width * ((obj.x + obj.boundsWidthPct / 2) / 100);
+                    centerY = height * ((obj.y + obj.boundsHeightPct / 2) / 100);
+                } else
+                {
+                    const rect = el.getBoundingClientRect();
+                    centerX = ((rect.left + rect.width / 2) - wrapperRect.left) / wrapperRect.width * width;
+                    centerY = ((rect.top + rect.height / 2) - wrapperRect.top) / wrapperRect.height * height;
+
+                    if (obj.type === 'text')
+                    {
+                        boxW = (rect.width / wrapperRect.width) * width;
+                        boxH = (rect.height / wrapperRect.height) * height;
+                    }
+                }
+
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(obj.rotation * Math.PI / 180);
+
+                // Shadow
+                if (s.shadowSize > 0 && s.shadowOpacity > 0)
+                {
+                    ctx.shadowColor = hexToRgbA(s.shadowColor, s.shadowOpacity);
+                    ctx.shadowBlur = s.shadowSize * 2 * resScale;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                } else
+                {
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowBlur = 0;
+                }
+
+                if (obj.type === 'text')
+                {
+                    const basePx = 50;
+                    const fontSize = basePx * obj.fontScale * resScale;
+                    ctx.font = `${fontSize}px ${obj.fontFamily}`;
+                    ctx.fillStyle = "white";
+                    ctx.textBaseline = "top";
+
+                    const lineHeight = fontSize * 1.2;
+                    const maxHeight = boxH;
+                    const maxWidth = boxW;
+
+                    const maxLines = Math.max(1, Math.floor(maxHeight / lineHeight));
+
+                    const text = obj.content || '';
+                    const lines = [];
+                    let currentLine = '';
+
+                    // Wrap on every character
+                    for (let i = 0; i < text.length; i++)
+                    {
+                        const ch = text[i];
+                        const testLine = currentLine + ch;
+                        const testWidth = ctx.measureText(testLine).width;
+                        if (testWidth > maxWidth && currentLine.length > 0)
+                        {
+                            lines.push(currentLine);
+                            currentLine = ch;
+                            if (lines.length >= maxLines)
+                            {
+                                break;
+                            }
+                        } else
+                        {
+                            currentLine = testLine;
+                        }
+                    }
+                    if (lines.length < maxLines && currentLine.length > 0)
+                    {
+                        lines.push(currentLine);
+                    }
+
+                    // --- CLIP WITH MARGIN FOR OUTLINE + SHADOW ---
+                    const outlinePx = (s.outlineSize || 0) * resScale;
+                    const shadowPx = (s.shadowSize || 0) * 2 * resScale;
+                    const clipMargin = outlinePx + shadowPx + 2; // small safety margin
+
+                    ctx.beginPath();
+                    ctx.rect(
+                        -maxWidth / 2 - clipMargin,
+                        -maxHeight / 2 - clipMargin,
+                        maxWidth + clipMargin * 2,
+                        maxHeight + clipMargin * 2
+                    );
+                    ctx.clip();
+
+                    // Stroke width for outline
+                    if (s.outlineSize > 0)
+                    {
+                        ctx.strokeStyle = hexToRgbA(s.outlineColor, s.outlineOpacity);
+                        ctx.lineWidth = outlinePx;
+                    }
+
+                    for (let i = 0; i < lines.length; i++)
+                    {
+                        const line = lines[i];
+                        const lineWidth = ctx.measureText(line).width;
+
+                        let x;
+                        if (obj.align === 'center')
+                        {
+                            ctx.textAlign = 'left'; // we'll center manually
+                            x = -lineWidth / 2;
+                        }
+                        else if (obj.align === 'right')
+                        {
+                            ctx.textAlign = 'left';
+                            x = maxWidth / 2 - lineWidth;
+                        }
+                        else
+                        {
+                            // left or justify -> treat as left
+                            ctx.textAlign = 'left';
+                            x = -maxWidth / 2;
+                        }
+
+                        const y = -maxHeight / 2 + i * lineHeight;
+
+                        if (s.outlineSize > 0)
+                        {
+                            ctx.strokeText(line, x, y);
+                        }
+                        ctx.fillText(line, x, y);
+                    }
+                }
+                else if (obj.type === 'image')
+                {
+                    const content = el.querySelector('.overlay-content');
+                    const imgEl = content ? content.querySelector('img') : null;
+                    if (!imgEl || !imgEl.complete || imgEl.naturalWidth === 0)
+                    {
+                        ctx.restore();
+                        return;
+                    }
+
+                    const baseW = 300 * resScale;
+                    const w = baseW * obj.scale;
+                    const h = (imgEl.naturalHeight / imgEl.naturalWidth) * w;
+
+                    if (s.outlineSize > 0)
+                    {
+                        ctx.strokeStyle = hexToRgbA(s.outlineColor, s.outlineOpacity);
+                        ctx.lineWidth = (s.outlineSize || 0) * resScale;
+                        ctx.strokeRect(-w / 2, -h / 2, w, h);
+                    }
+
+                    ctx.drawImage(imgEl, -w / 2, -h / 2, w, h);
+                }
+
+                ctx.restore();
+            });
         }
 
         function drawCompositeLayer(ctx, geo)
         {
-            // 1. Draw Covers (Fast)
             if (state.images.back) drawImageCover(ctx, state.images.back, geo.back, state.params.backOffset);
             else drawPlaceholder(ctx, geo.back, "");
-
             if (state.images.front) drawImageCover(ctx, state.images.front, geo.front, state.params.frontOffset);
             else drawPlaceholder(ctx, geo.front, "");
-
-            // 2. Draw Bleeds (Fast)
             if (state.images.back) processAutoBleed(ctx, state.images.back, geo.back, geo.blendLeft, true, state.params.backOffset);
             if (state.images.front) processAutoBleed(ctx, state.images.front, geo.front, geo.blendRight, false, state.params.frontOffset);
-
-            // 3. Draw Spine (Super Fast - Cached)
-            if (state.images.spine)
-            {
-                // We just draw the cached canvas!
-                ctx.drawImage(spineCacheCanvas, geo.spine.x, geo.spine.y);
-            } else
-            {
-                ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 1;
-                ctx.strokeRect(geo.spine.x, geo.spine.y, geo.spine.w, geo.spine.h);
-            }
+            if (state.images.spine) ctx.drawImage(spineCacheCanvas, geo.spine.x, geo.spine.y);
+            else { ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 1; ctx.strokeRect(geo.spine.x, geo.spine.y, geo.spine.w, geo.spine.h); }
         }
 
         // --- SPINE CACHE LOGIC ---
         function updateSpineCache(destRect)
         {
-            // Resize cache canvas if needed
             if (spineCacheCanvas.width !== destRect.w || spineCacheCanvas.height !== destRect.h)
             {
-                spineCacheCanvas.width = destRect.w;
-                spineCacheCanvas.height = destRect.h;
+                spineCacheCanvas.width = destRect.w; spineCacheCanvas.height = destRect.h;
             }
-
             const sCtx = spineCacheCanvas.getContext('2d');
             sCtx.clearRect(0, 0, destRect.w, destRect.h);
-
             const img = state.images.spine;
             if (!img) return;
-
-            // Perform the "Heavy" pixel logic here
             const trimmedY = scanForBlackRows(img);
             const effectiveH = trimmedY.bottom - trimmedY.top;
             const crop = getCropCoords(img.width, effectiveH, destRect.w, destRect.h, 0);
             const finalCropY = crop.y + trimmedY.top;
-            const mult = state.params.alphaMult;
-            const pow = state.params.alphaPower;
-
-            if (mult === 0 || pow === 0)
-            {
-                sCtx.drawImage(img, crop.x, finalCropY, crop.w, crop.h, 0, 0, destRect.w, destRect.h);
-                return;
-            }
-
-            // Draw clean image
+            const mult = state.params.alphaMult; const pow = state.params.alphaPower;
             sCtx.drawImage(img, crop.x, finalCropY, crop.w, crop.h, 0, 0, destRect.w, destRect.h);
-
-            // Apply Alpha LUT
+            if (mult === 0 || pow === 0) return;
             const imgData = sCtx.getImageData(0, 0, destRect.w, destRect.h);
             const data = imgData.data;
             const w = destRect.w; const h = destRect.h; const halfW = w / 2;
-
             const alphaFloats = new Float32Array(w);
             for (let x = 0; x < w; x++)
             {
                 const dist = Math.min(x, w - x - 1);
                 let alpha = Math.pow((dist / halfW) * mult, pow);
-                if (alpha > 1.0) alpha = 1.0;
-                if (alpha < 0.0) alpha = 0.0;
+                if (alpha > 1.0) alpha = 1.0; if (alpha < 0.0) alpha = 0.0;
                 alphaFloats[x] = alpha;
             }
-
             for (let y = 0; y < h; y++)
             {
                 for (let x = 0; x < w; x++)
@@ -752,23 +1779,15 @@
             const targetAspect = targetW / targetH;
             const imgAspect = imgW / imgH;
             let cropW, cropH;
-            if (targetAspect > imgAspect)
-            {
-                cropW = imgW; cropH = Math.floor(imgW / targetAspect);
-            } else
-            {
-                cropH = imgH; cropW = Math.floor(imgH * targetAspect);
-            }
-
+            if (targetAspect > imgAspect) { cropW = imgW; cropH = Math.floor(imgW / targetAspect); }
+            else { cropH = imgH; cropW = Math.floor(imgH * targetAspect); }
             let x = (imgW - cropW) / 2;
             let y = (imgH - cropH) / 2;
-
             if (offsetPct && offsetPct !== 0 && cropW < imgW)
             {
                 const shiftAmount = (offsetPct / 100) * imgW;
                 x += shiftAmount;
-                if (x < 0) x = 0;
-                if (x + cropW > imgW) x = imgW - cropW;
+                if (x < 0) x = 0; if (x + cropW > imgW) x = imgW - cropW;
             }
             return { x: Math.floor(x), y: Math.floor(y), w: cropW, h: cropH };
         }
@@ -785,7 +1804,6 @@
             const widthRatio = sourceRect.w / crop.w;
             const neededSourceW = Math.floor(destRect.w / widthRatio);
             const availableGap = isBackCover ? (img.width - (crop.x + crop.w)) : crop.x;
-
             if (neededSourceW <= availableGap)
             {
                 const srcX = isBackCover ? (crop.x + crop.w) : (crop.x - neededSourceW);
@@ -850,7 +1868,6 @@
             let srcColor = state.isCustomTemplate ? "#e0912d" : "#007acc";
             if (img && state.isCustomTemplate) srcText = `Src: ${img.width}x${img.height} px`;
             el.innerHTML = `<div class="rect-info">${targetText}</div><div class="src-info" style="color:${srcColor}">${srcText}</div>`;
-
             setLabel('info-back', 'back', geo.back);
             setLabel('info-spine', 'spine', geo.spine);
             setLabel('info-front', 'front', geo.front);
@@ -903,6 +1920,13 @@
             };
             img.src = tCvs.toDataURL('image/webp', 0.5);
         }
+
+        // Handle window resizing for aspect-fit preview
+        window.addEventListener('resize', () =>
+        {
+            requestRender();
+            renderDomOverlays();
+        });
 
         generateDefaultTemplate();
 
