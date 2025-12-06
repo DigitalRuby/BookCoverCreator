@@ -1109,7 +1109,7 @@
             dom.groupTextBg.style.display = isText ? 'grid' : 'none';
             dom.groupBorder.style.display = 'grid'; // useful for both text and image overlays
 
-            // NEW: hide stroke/outline controls for images
+            // Hide stroke/outline controls for images
             if (dom.groupOutline)
             {
                 dom.groupOutline.style.display = isText ? 'block' : 'none';
@@ -1401,13 +1401,16 @@
             const s = obj.style;
             const hexToRgbA = (hex, alpha) =>
             {
+                hex = hex || '#000000';
                 let c = hex.substring(1).split('');
                 if (c.length == 3) c = [c[0], c[0], c[1], c[1], c[2], c[2]];
                 c = '0x' + c.join('');
                 return 'rgba(' + [(c >> 16) & 255, (c >> 8) & 255, c & 255].join(',') + ',' + alpha + ')';
             };
 
-            const shadowStr = `drop-shadow(0px 0px ${s.shadowSize}px ${hexToRgbA(s.shadowColor, s.shadowOpacity)})`;
+            const hasShadow = (s.shadowSize > 0 && s.shadowOpacity > 0);
+            const shadowColorCss = hexToRgbA(s.shadowColor || '#000000', (s.shadowOpacity != null ? s.shadowOpacity : 1));
+            const shadowStr = hasShadow ? `drop-shadow(0px 0px ${s.shadowSize}px ${shadowColorCss})` : 'none';
             const cornerRadiusPx = (s.cornerRadius || 0) + 'px';
             const paddingPx = (s.padding || 0) + 'px';
 
@@ -1433,8 +1436,16 @@
                     content.style.webkitTextStroke = '0';
                 }
 
-                // Text Shadow
-                content.style.filter = shadowStr;
+                // Text Shadow (text only, not border)
+                content.style.filter = 'none';
+                if (hasShadow)
+                {
+                    content.style.textShadow = `0px 0px ${s.shadowSize}px ${shadowColorCss}`;
+                }
+                else
+                {
+                    content.style.textShadow = 'none';
+                }
 
                 // Background
                 if (s.bgType === 'none')
@@ -1505,7 +1516,6 @@
         // --- DRAG & RESIZE LOGIC ---
         let isDragging = false;
         let activeDragId = null;
-        // NEW: drag uses mouse deltas instead of rect offsets
         let dragStartMouse = { x: 0, y: 0 };
         let dragStartObjPos = { x: 0, y: 0 };
 
@@ -1984,9 +1994,11 @@
                         return;
                     }
 
-                    const baseW = 300 * resScale;
-                    const w = baseW * obj.scale;
-                    const h = (imgEl.naturalHeight / imgEl.naturalWidth) * w;
+                    // Use the DOM size of the overlay (preview) scaled to export resolution
+                    const rect = el.getBoundingClientRect();
+                    const w = (rect.width / wrapperRect.width) * width;
+                    const h = (rect.height / wrapperRect.height) * height;
+
                     const cornerRadius = (s.cornerRadius || 0) * resScale;
 
                     const maxPadding = Math.min(w / 2, h / 2);
