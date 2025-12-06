@@ -581,7 +581,8 @@
 
     <div class="sidebar">
         <div style="display:flex; align-items:center; justify-content:space-between;">
-            <h2>Cover Creator</h2><div id="render-spinner" class="loader"></div>
+            <h2>Cover Creator</h2>
+            <div id="render-spinner" class="loader"></div>
         </div>
 
         <div id="panel-layout" class="sidebar-section active">
@@ -1279,21 +1280,21 @@
             {
                 // Font
                 html += `<div class="popup-row"><label>Font</label><select onchange="updateTransform('${obj.id}', 'fontFamily', this.value)">
-                                    <option value="Arial" ${obj.fontFamily == 'Arial' ? 'selected' : ''}>Arial</option>
-                                    <option value="'Times New Roman'" ${obj.fontFamily == "'Times New Roman'" ? 'selected' : ''}>Times</option>
-                                    <option value="'Courier New'" ${obj.fontFamily == "'Courier New'" ? 'selected' : ''}>Courier</option>
-                                    <option value="Georgia" ${obj.fontFamily == 'Georgia' ? 'selected' : ''}>Georgia</option>
-                                    <option value="Verdana" ${obj.fontFamily == 'Verdana' ? 'selected' : ''}>Verdana</option>
-                                    <option value="Impact" ${obj.fontFamily == 'Impact' ? 'selected' : ''}>Impact</option>
-                                </select></div>`;
+                                        <option value="Arial" ${obj.fontFamily == 'Arial' ? 'selected' : ''}>Arial</option>
+                                        <option value="'Times New Roman'" ${obj.fontFamily == "'Times New Roman'" ? 'selected' : ''}>Times</option>
+                                        <option value="'Courier New'" ${obj.fontFamily == "'Courier New'" ? 'selected' : ''}>Courier</option>
+                                        <option value="Georgia" ${obj.fontFamily == 'Georgia' ? 'selected' : ''}>Georgia</option>
+                                        <option value="Verdana" ${obj.fontFamily == 'Verdana' ? 'selected' : ''}>Verdana</option>
+                                        <option value="Impact" ${obj.fontFamily == 'Impact' ? 'selected' : ''}>Impact</option>
+                                    </select></div>`;
 
                 // Align
                 html += `<div class="popup-row"><label>Align</label><div class="icon-btn-group">
-                                    <div class="icon-btn ${obj.align == 'left' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'left')"><svg><use href="#icon-left"/></svg></div>
-                                    <div class="icon-btn ${obj.align == 'center' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'center')"><svg><use href="#icon-center"/></svg></div>
-                                    <div class="icon-btn ${obj.align == 'right' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'right')"><svg><use href="#icon-right"/></svg></div>
-                                    <div class="icon-btn ${obj.align == 'justify' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'justify')"><svg><use href="#icon-full"/></svg></div>
-                                </div></div>`;
+                                        <div class="icon-btn ${obj.align == 'left' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'left')"><svg><use href="#icon-left"/></svg></div>
+                                        <div class="icon-btn ${obj.align == 'center' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'center')"><svg><use href="#icon-center"/></svg></div>
+                                        <div class="icon-btn ${obj.align == 'right' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'right')"><svg><use href="#icon-right"/></svg></div>
+                                        <div class="icon-btn ${obj.align == 'justify' ? 'active' : ''}" onclick="updateTransform('${obj.id}', 'align', 'justify')"><svg><use href="#icon-full"/></svg></div>
+                                    </div></div>`;
             }
             return html;
         }
@@ -1750,6 +1751,7 @@
 
                 let centerX, centerY;
                 let boxW = null, boxH = null;
+                let domRect = null;
 
                 if (obj.type === 'text' && obj.boundsWidthPct && obj.boundsHeightPct)
                 {
@@ -1760,6 +1762,7 @@
                 } else
                 {
                     const rect = el.getBoundingClientRect();
+                    domRect = rect;
                     centerX = ((rect.left + rect.width / 2) - wrapperRect.left) / wrapperRect.width * width;
                     centerY = ((rect.top + rect.height / 2) - wrapperRect.top) / wrapperRect.height * height;
 
@@ -1959,9 +1962,10 @@
                         return;
                     }
 
-                    const baseW = 300 * resScale;
-                    const w = baseW * obj.scale;
-                    const h = (imgEl.naturalHeight / imgEl.naturalWidth) * w;
+                    // Use the actual displayed size of the image in the DOM
+                    const rect = domRect || el.getBoundingClientRect();
+                    const w = (rect.width / wrapperRect.width) * width;
+                    const h = (rect.height / wrapperRect.height) * height;
                     const cornerRadius = (s.cornerRadius || 0) * resScale;
 
                     const maxPadding = Math.min(w / 2, h / 2);
