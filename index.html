@@ -178,7 +178,7 @@
         {
             font-size: 0.85rem;
             color: #999;
-            margin: 5px 0 0 0;
+            margin: 2px 0 0 0;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             border-bottom: 1px solid #444;
@@ -658,10 +658,9 @@
                 <input type="text" id="prop-text-content">
             </div>
 
-            <!-- Text Stroke / Image Outline (existing behavior) -->
-            <!-- Wrapped so it can be hidden for images -->
+            <!-- Text Stroke -->
             <div id="group-outline">
-                <h3>Text Stroke / Image Outline</h3>
+                <h3>Stroke</h3>
                 <div class="params-grid">
                     <div class="control-group">
                         <label>Stroke Color</label>
@@ -675,6 +674,22 @@
                         <label>Stroke Opacity</label>
                         <input type="range" id="prop-outline-opacity" min="0" max="1" step="0.1">
                     </div>
+                </div>
+            </div>
+
+            <h3>Shadow</h3>
+            <div class="params-grid">
+                <div class="control-group">
+                    <label>Color</label>
+                    <input type="color" id="prop-shadow-color" value="#000000">
+                </div>
+                <div class="control-group">
+                    <label>Blur/Size</label>
+                    <input type="number" id="prop-shadow-size" step="1" min="0">
+                </div>
+                <div class="control-group full">
+                    <label>Opacity</label>
+                    <input type="range" id="prop-shadow-opacity" min="0" max="1" step="0.1">
                 </div>
             </div>
 
@@ -703,24 +718,8 @@
                 </div>
             </div>
 
-            <h3>Shadow</h3>
-            <div class="params-grid">
-                <div class="control-group">
-                    <label>Color</label>
-                    <input type="color" id="prop-shadow-color" value="#000000">
-                </div>
-                <div class="control-group">
-                    <label>Blur/Size</label>
-                    <input type="number" id="prop-shadow-size" step="1" min="0">
-                </div>
-                <div class="control-group full">
-                    <label>Opacity</label>
-                    <input type="range" id="prop-shadow-opacity" min="0" max="1" step="0.1">
-                </div>
-            </div>
-
             <div id="group-text-bg">
-                <h3>Text Background</h3>
+                <h3>Background</h3>
                 <div class="params-grid">
                     <div class="control-group">
                         <label>Type</label>
@@ -1489,10 +1488,10 @@
             {
                 // IMAGE OVERLAY:
                 // Border + padding are applied on content, image sits inside.
+                const borderColor = s.borderColor || '#ffffff';
+                const borderSize = s.borderSize || 0;
+                const borderOpacity = (s.borderOpacity != null ? s.borderOpacity : 1);
 
-                const borderColor = s.borderColor || s.outlineColor || '#ffffff';
-                const borderSize = (s.borderSize && s.borderSize > 0) ? s.borderSize : (s.outlineSize || 0);
-                const borderOpacity = (s.borderOpacity != null ? s.borderOpacity : s.outlineOpacity != null ? s.outlineOpacity : 1);
 
                 // Padding between image and border
                 content.style.padding = paddingPx;
@@ -1784,9 +1783,7 @@
             const scale = scaleMul || 1;
 
             // Border width in export pixels.
-            const borderBase = (style.borderSize && style.borderSize > 0)
-                ? style.borderSize
-                : (style.outlineSize || 0); // fallback if using outline as border
+            const borderBase = style.borderSize || 0;
             const borderPx = borderBase * resScale * scale;
 
             // Padding in export pixels.
@@ -2186,10 +2183,8 @@
                         ctx.beginPath();
                         drawRoundedRect(ctx, borderRect.x, borderRect.y, borderRect.w, borderRect.h, borderRect.r);
                         ctx.strokeStyle = toRgba(
-                            style.borderColor || style.outlineColor || '#ffffff',
-                            style.borderOpacity != null
-                                ? style.borderOpacity
-                                : (style.outlineOpacity != null ? style.outlineOpacity : 1)
+                            style.borderColor || '#ffffff',
+                            style.borderOpacity != null ? style.borderOpacity : 1
                         );
                         ctx.lineWidth = borderPx;
                         ctx.stroke();
