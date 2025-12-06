@@ -1762,147 +1762,205 @@
             }
         }
 
-        function renderOverlaysToContext(ctx, width, height)
+        // --- Helper: convert hex + alpha to rgba() ---
+        function toRgba(hex, alpha)
+        {
+            hex = hex || '#000000';
+            let c = hex.substring(1).split('');
+            if (c.length === 3) c = [c[0], c[0], c[1], c[1], c[2], c[2]];
+            c = '0x' + c.join('');
+            return `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${alpha})`;
+        }
+
+        // Common box model: fixed overlay bounds.
+        // Border and padding shrink the content INSIDE the original box.
+        // This mimics the preview: border does NOT expand the overlay.
+        function computeBoxModel(boxW, boxH, style, scaleMul, resScale)
+        {
+            style = style || {};
+            const scale = scaleMul || 1;
+
+            // Border width in export pixels.
+            const borderBase = (style.borderSize && style.borderSize > 0)
+                ? style.borderSize
+                : (style.outlineSize || 0); // fallback if using outline as border
+            const borderPx = borderBase * resScale * scale;
+
+            // Padding in export pixels.
+            const paddingPx = (style.padding || 0) * resScale * scale;
+
+            // Outer overlay bounds: this stays fixed, like the DOM overlay-item.
+            const outerX = -boxW / 2;
+            const outerY = -boxH / 2;
+
+            // Border rectangle is INSIDE outer bounds.
+            // Stroke is centered on this rect, so outer edge of the stroke
+            // still lines up with the original box edges.
+            const borderRect = {
+                x: outerX + borderPx / 2,
+                y: outerY + borderPx / 2,
+                w: Math.max(0, boxW - borderPx),
+                h: Math.max(0, boxH - borderPx)
+            };
+
+            // Content (image/text) is inside border + padding.
+            const contentRect = {
+                x: outerX + borderPx + paddingPx,
+                y: outerY + borderPx + paddingPx,
+                w: Math.max(0, boxW - 2 * (borderPx + paddingPx)),
+                h: Math.max(0, boxH - 2 * (borderPx + paddingPx))
+            };
+
+            // Corner radii (export pixels).
+            const outerRadius = (style.cornerRadius || 0) * resScale * scale;
+            const borderRadius = Math.max(0, outerRadius - borderPx / 2);
+            const contentRadius = Math.max(0, borderRadius - paddingPx);
+
+            borderRect.r = borderRadius;
+            contentRect.r = contentRadius;
+
+            return {
+                borderPx,
+                paddingPx,
+                outerRect: { x: outerX, y: outerY, w: boxW, h: boxH, r: outerRadius },
+                borderRect,
+                contentRect
+            };
+        }
+
+        // Existing: logical geometry for text overlays (unchanged from last answer)
+        function getTextBoxGeometry(obj, canvasW, canvasH)
+        {
+            if (obj.boundsWidthPct && obj.boundsHeightPct)
+            {
+                const boxW = canvasW * (obj.boundsWidthPct / 100);
+                const boxH = canvasH * (obj.boundsHeightPct / 100);
+
+                const centerX = canvasW * ((obj.x + obj.boundsWidthPct / 2) / 100);
+                const centerY = canvasH * ((obj.y + obj.boundsHeightPct / 2) / 100);
+
+                return { centerX, centerY, boxW, boxH };
+            }
+
+            // Fallback for very old overlays
+            const el = document.getElementById('ov-' + obj.id);
+            const wrapperRect = dom.canvasWrapper.getBoundingClientRect();
+            if (el && wrapperRect.width > 0 && wrapperRect.height > 0)
+            {
+                const rect = el.getBoundingClientRect();
+                const relX = (rect.left - wrapperRect.left) / wrapperRect.width;
+                const relY = (rect.top - wrapperRect.top) / wrapperRect.height;
+                const relW = rect.width / wrapperRect.width;
+                const relH = rect.height / wrapperRect.height;
+
+                const boxW = canvasW * relW;
+                const boxH = canvasH * relH;
+                const centerX = canvasW * (relX + relW / 2);
+                const centerY = canvasH * (relY + relH / 2);
+
+                return { centerX, centerY, boxW, boxH };
+            }
+
+            const boxW = canvasW * 0.3;
+            const boxH = canvasH * 0.1;
+            return { centerX: boxW / 2, centerY: boxH / 2, boxW, boxH };
+        }
+
+        // Existing: logical geometry for image overlays (slightly simplified)
+        function getImageBoxGeometry(obj, canvasW, canvasH, imgEl)
+        {
+            const imgW = imgEl.naturalWidth || imgEl.width || 1;
+            const imgH = imgEl.naturalHeight || imgEl.height || 1;
+            const aspect = imgH / imgW;
+            const scale = obj.scale || 1;
+
+            let baseWidthPct = obj.boundsWidthPct;
+            if (!baseWidthPct)
+            {
+                baseWidthPct = 30; // default like addImageOverlay
+            }
+
+            const baseW = canvasW * (baseWidthPct / 100);
+            const baseH = baseW * aspect;
+
+            const visualW = baseW * scale;
+            const visualH = baseH * scale;
+
+            const topXPx = canvasW * (obj.x / 100);
+            const topYPx = canvasH * (obj.y / 100);
+
+            const centerX = topXPx + baseW / 2;
+            const centerY = topYPx + visualH / 2;
+
+            return { centerX, centerY, baseW, baseH, visualW, visualH, scale };
+        }
+
+        function renderOverlaysToContext(ctx, canvasW, canvasH)
         {
             const wrapperRect = dom.canvasWrapper.getBoundingClientRect();
+            const previewW = wrapperRect.width || canvasW;
+            const resScale = canvasW / previewW; // export px per preview px
 
             overlays.forEach(obj =>
             {
-                const el = document.getElementById('ov-' + obj.id);
-                if (!el) return;
+                const style = obj.style || {};
 
-                const s = obj.style;
-                const hexToRgbA = (hex, alpha) =>
-                {
-                    let c = hex.substring(1).split('');
-                    if (c.length == 3) c = [c[0], c[0], c[1], c[1], c[2], c[2]];
-                    c = '0x' + c.join('');
-                    return `rgba(${(c >> 16) & 255},${(c >> 8) & 255},${c & 255},${alpha})`;
-                };
-
-                const domW = wrapperRect.width || 1000;
-                const resScale = width / domW;
-
-                let centerX, centerY;
-                let boxW = null, boxH = null;
-
-                if (obj.type === 'text' && obj.boundsWidthPct && obj.boundsHeightPct)
-                {
-                    boxW = width * (obj.boundsWidthPct / 100);
-                    boxH = height * (obj.boundsHeightPct / 100);
-                    centerX = width * ((obj.x + obj.boundsWidthPct / 2) / 100);
-                    centerY = height * ((obj.y + obj.boundsHeightPct / 2) / 100);
-                } else
-                {
-                    const rect = el.getBoundingClientRect();
-                    centerX = ((rect.left + rect.width / 2) - wrapperRect.left) / wrapperRect.width * width;
-                    centerY = ((rect.top + rect.height / 2) - wrapperRect.top) / wrapperRect.height * height;
-
-                    if (obj.type === 'text')
-                    {
-                        boxW = (rect.width / wrapperRect.width) * width;
-                        boxH = (rect.height / wrapperRect.height) * height;
-                    }
-                }
-
-                ctx.save();
-                ctx.translate(centerX, centerY);
-                ctx.rotate(obj.rotation * Math.PI / 180);
-
-                // Shadow
-                if (s.shadowSize > 0 && s.shadowOpacity > 0)
-                {
-                    ctx.shadowColor = hexToRgbA(s.shadowColor, s.shadowOpacity);
-                    ctx.shadowBlur = s.shadowSize * 2 * resScale;
-                    ctx.shadowOffsetX = 0;
-                    ctx.shadowOffsetY = 0;
-                } else
-                {
-                    ctx.shadowColor = 'transparent';
-                    ctx.shadowBlur = 0;
-                }
-
-                const paddingPx = (s.padding || 0) * resScale;
-
+                // ---------- TEXT OVERLAYS ----------
                 if (obj.type === 'text')
                 {
-                    const basePx = 50;
-                    const fontSize = basePx * obj.fontScale * resScale;
-                    ctx.font = `${fontSize}px ${obj.fontFamily}`;
-                    ctx.fillStyle = "white";
-                    ctx.textBaseline = "top";
+                    const geo = getTextBoxGeometry(obj, canvasW, canvasH);
+                    const centerX = geo.centerX;
+                    const centerY = geo.centerY;
+                    const boxW = geo.boxW;
+                    const boxH = geo.boxH;
 
-                    const lineHeight = fontSize * 1.2;
-                    const maxHeight = boxH - paddingPx * 2;
-                    const maxWidth = boxW - paddingPx * 2;
+                    // Use common box model – border + padding shrink content but keep outer box fixed
+                    const layout = computeBoxModel(boxW, boxH, style, 1, resScale);
+                    const borderPx = layout.borderPx;
+                    const borderRect = layout.borderRect;
+                    const contentRect = layout.contentRect;
 
-                    const maxLines = Math.max(1, Math.floor(maxHeight / lineHeight));
+                    ctx.save();
+                    ctx.translate(centerX, centerY);
+                    ctx.rotate(obj.rotation * Math.PI / 180);
 
-                    const text = obj.content || '';
-                    const lines = [];
-                    let currentLine = '';
+                    // --- Background (inside border), no shadow ---
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowBlur = 0;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
 
-                    // Wrap on every character
-                    for (let i = 0; i < text.length; i++)
-                    {
-                        const ch = text[i];
-                        const testLine = currentLine + ch;
-                        const testWidth = ctx.measureText(testLine).width;
-                        if (testWidth > maxWidth && currentLine.length > 0)
-                        {
-                            lines.push(currentLine);
-                            currentLine = ch;
-                            if (lines.length >= maxLines)
-                            {
-                                break;
-                            }
-                        } else
-                        {
-                            currentLine = testLine;
-                        }
-                    }
-                    if (lines.length < maxLines && currentLine.length > 0)
-                    {
-                        lines.push(currentLine);
-                    }
-
-                    const outlinePx = (s.outlineSize || 0) * resScale;
-                    const shadowPx = (s.shadowSize || 0) * 2 * resScale;
-                    const clipMargin = outlinePx + shadowPx + 2;
-                    const cornerRadius = (s.cornerRadius || 0) * resScale;
-
-                    // Background (behind text) – full box
-                    if (s.bgType && s.bgType !== 'none')
+                    if (style.bgType && style.bgType !== 'none' && borderRect.w > 0 && borderRect.h > 0)
                     {
                         let fill;
-                        if (s.bgType === 'solid')
+                        if (style.bgType === 'solid')
                         {
-                            fill = s.bgColor1 || '#000000';
+                            fill = style.bgColor1 || '#000000';
                         }
-                        else if (s.bgType === 'gradient')
+                        else if (style.bgType === 'gradient')
                         {
-                            const c1 = s.bgColor1 || '#000000';
-                            const c2 = s.bgColor2 || '#ffffff';
+                            const c1 = style.bgColor1 || '#000000';
+                            const c2 = style.bgColor2 || '#ffffff';
                             let x0, y0, x1, y1;
-                            if (s.bgDirection === 'horizontal')
+                            if (style.bgDirection === 'horizontal')
                             {
-                                x0 = -boxW / 2; y0 = 0;
-                                x1 = boxW / 2; y1 = 0;
+                                x0 = borderRect.x; y0 = 0;
+                                x1 = borderRect.x + borderRect.w; y1 = 0;
                             }
-                            else if (s.bgDirection === 'diag1') // ↘
+                            else if (style.bgDirection === 'diag1')
                             {
-                                x0 = -boxW / 2; y0 = -boxH / 2;
-                                x1 = boxW / 2; y1 = boxH / 2;
+                                x0 = borderRect.x; y0 = borderRect.y;
+                                x1 = borderRect.x + borderRect.w; y1 = borderRect.y + borderRect.h;
                             }
-                            else if (s.bgDirection === 'diag2') // ↗
+                            else if (style.bgDirection === 'diag2')
                             {
-                                x0 = -boxW / 2; y0 = boxH / 2;
-                                x1 = boxW / 2; y1 = -boxH / 2;
+                                x0 = borderRect.x; y0 = borderRect.y + borderRect.h;
+                                x1 = borderRect.x + borderRect.w; y1 = borderRect.y;
                             }
                             else // vertical
                             {
-                                x0 = 0; y0 = -boxH / 2;
-                                x1 = 0; y1 = boxH / 2;
+                                x0 = 0; y0 = borderRect.y;
+                                x1 = 0; y1 = borderRect.y + borderRect.h;
                             }
                             const grad = ctx.createLinearGradient(x0, y0, x1, y1);
                             grad.addColorStop(0, c1);
@@ -1912,44 +1970,107 @@
 
                         ctx.save();
                         ctx.beginPath();
-                        drawRoundedRect(ctx, -boxW / 2, -boxH / 2, boxW, boxH, cornerRadius);
+                        drawRoundedRect(ctx, borderRect.x, borderRect.y, borderRect.w, borderRect.h, borderRect.r);
                         ctx.fillStyle = fill;
                         ctx.fill();
                         ctx.restore();
                     }
 
-                    // Border outline rectangle
-                    const borderSize = (s.borderSize || 0) * resScale;
-                    const borderOpacity = (s.borderOpacity != null ? s.borderOpacity : 1);
-                    const borderColor = s.borderColor || '#ffffff';
-
-                    if (borderSize > 0)
+                    // --- Border (no shadow), stays inside fixed overlay box ---
+                    if (borderPx > 0 && borderRect.w > 0 && borderRect.h > 0)
                     {
+                        ctx.shadowColor = 'transparent';
+                        ctx.shadowBlur = 0;
+                        ctx.shadowOffsetX = 0;
+                        ctx.shadowOffsetY = 0;
+
                         ctx.save();
                         ctx.beginPath();
-                        drawRoundedRect(ctx, -boxW / 2, -boxH / 2, boxW, boxH, cornerRadius);
-                        ctx.strokeStyle = hexToRgbA(borderColor, borderOpacity);
-                        ctx.lineWidth = borderSize;
+                        drawRoundedRect(ctx, borderRect.x, borderRect.y, borderRect.w, borderRect.h, borderRect.r);
+                        ctx.strokeStyle = toRgba(
+                            style.borderColor || '#ffffff',
+                            style.borderOpacity != null ? style.borderOpacity : 1
+                        );
+                        ctx.lineWidth = borderPx;
                         ctx.stroke();
                         ctx.restore();
                     }
 
-                    // Clip (with margin for outline + shadow)
+                    // --- Text inside contentRect (shrunken by border + padding) ---
+                    const basePx = 50;
+                    const fontSize = basePx * (obj.fontScale || 1) * resScale;
+                    ctx.font = `${fontSize}px ${obj.fontFamily}`;
+                    ctx.fillStyle = "white";
+                    ctx.textBaseline = "top";
+
+                    const lineHeight = fontSize * 1.2;
+                    const maxHeight = contentRect.h;
+                    const maxWidth = contentRect.w;
+                    const maxLines = Math.max(1, Math.floor(maxHeight / lineHeight));
+
+                    const text = obj.content || '';
+                    const lines = [];
+                    let currentLine = '';
+
+                    for (let i = 0; i < text.length; i++)
+                    {
+                        const ch = text[i];
+                        const testLine = currentLine + ch;
+                        const testWidth = ctx.measureText(testLine).width;
+                        if (testWidth > maxWidth && currentLine.length > 0)
+                        {
+                            lines.push(currentLine);
+                            currentLine = ch;
+                            if (lines.length >= maxLines) break;
+                        }
+                        else
+                        {
+                            currentLine = testLine;
+                        }
+                    }
+                    if (lines.length < maxLines && currentLine.length > 0)
+                    {
+                        lines.push(currentLine);
+                    }
+
+                    const outlinePx = (style.outlineSize || 0) * resScale;
+                    const shadowPx = (style.shadowSize || 0) * 2 * resScale;
+                    const clipMargin = outlinePx + shadowPx + 2;
+
+                    // Clip around contentRect (with margin for outline/shadow)
                     ctx.beginPath();
                     drawRoundedRect(
                         ctx,
-                        -boxW / 2 - clipMargin,
-                        -boxH / 2 - clipMargin,
-                        boxW + clipMargin * 2,
-                        boxH + clipMargin * 2,
-                        cornerRadius + clipMargin
+                        contentRect.x - clipMargin,
+                        contentRect.y - clipMargin,
+                        contentRect.w + clipMargin * 2,
+                        contentRect.h + clipMargin * 2,
+                        contentRect.r + clipMargin
                     );
                     ctx.clip();
 
-                    // Text stroke (around glyphs)
-                    if (s.outlineSize > 0)
+                    // Shadow only on glyphs
+                    if (style.shadowSize > 0 && style.shadowOpacity > 0)
                     {
-                        ctx.strokeStyle = hexToRgbA(s.outlineColor, s.outlineOpacity);
+                        ctx.shadowColor = toRgba(style.shadowColor || '#000000', style.shadowOpacity);
+                        ctx.shadowBlur = style.shadowSize * 2 * resScale;
+                        ctx.shadowOffsetX = 0;
+                        ctx.shadowOffsetY = 0;
+                    }
+                    else
+                    {
+                        ctx.shadowColor = 'transparent';
+                        ctx.shadowBlur = 0;
+                        ctx.shadowOffsetX = 0;
+                        ctx.shadowOffsetY = 0;
+                    }
+
+                    if (style.outlineSize > 0)
+                    {
+                        ctx.strokeStyle = toRgba(
+                            style.outlineColor || '#000000',
+                            style.outlineOpacity != null ? style.outlineOpacity : 1
+                        );
                         ctx.lineWidth = outlinePx;
                     }
 
@@ -1961,83 +2082,117 @@
                         let x;
                         if (obj.align === 'center')
                         {
-                            ctx.textAlign = 'left'; // center manually
-                            x = -lineWidth / 2;
+                            ctx.textAlign = 'left';
+                            x = contentRect.x + (contentRect.w - lineWidth) / 2;
                         }
                         else if (obj.align === 'right')
                         {
                             ctx.textAlign = 'left';
-                            x = (boxW / 2) - paddingPx - lineWidth;
+                            x = contentRect.x + (contentRect.w - lineWidth);
                         }
                         else
                         {
                             ctx.textAlign = 'left';
-                            x = -boxW / 2 + paddingPx;
+                            x = contentRect.x;
                         }
 
-                        const y = -boxH / 2 + paddingPx + i * lineHeight;
+                        const y = contentRect.y + i * lineHeight;
 
-                        if (s.outlineSize > 0)
+                        if (style.outlineSize > 0)
                         {
                             ctx.strokeText(line, x, y);
                         }
                         ctx.fillText(line, x, y);
                     }
+
+                    ctx.restore();
                 }
+                // ---------- IMAGE OVERLAYS ----------
                 else if (obj.type === 'image')
                 {
-                    const content = el.querySelector('.overlay-content');
+                    const el = document.getElementById('ov-' + obj.id);
+                    const content = el ? el.querySelector('.overlay-content') : null;
                     const imgEl = content ? content.querySelector('img') : null;
                     if (!imgEl || !imgEl.complete || imgEl.naturalWidth === 0)
                     {
-                        ctx.restore();
                         return;
                     }
 
-                    // Use the DOM size of the overlay (preview) scaled to export resolution
-                    const rect = el.getBoundingClientRect();
-                    const w = (rect.width / wrapperRect.width) * width;
-                    const h = (rect.height / wrapperRect.height) * height;
+                    const geo = getImageBoxGeometry(obj, canvasW, canvasH, imgEl);
+                    const centerX = geo.centerX;
+                    const centerY = geo.centerY;
 
-                    const cornerRadius = (s.cornerRadius || 0) * resScale;
+                    // The outer overlay box is the visual (scaled) area
+                    const boxW = geo.visualW;
+                    const boxH = geo.visualH;
+                    const scale = geo.scale;
 
-                    const maxPadding = Math.min(w / 2, h / 2);
-                    const innerPadding = Math.min(paddingPx, maxPadding);
+                    const layout = computeBoxModel(boxW, boxH, style, scale, resScale);
+                    const borderPx = layout.borderPx;
+                    const borderRect = layout.borderRect;
+                    const contentRect = layout.contentRect;
 
-                    // Outer border color/size for image, falling back to outline if border not set
-                    const borderColor = s.borderColor || s.outlineColor || '#ffffff';
-                    const borderSize = (s.borderSize && s.borderSize > 0 ? s.borderSize : s.outlineSize || 0) * resScale;
-                    const borderOpacity = (s.borderOpacity != null ? s.borderOpacity : s.outlineOpacity != null ? s.outlineOpacity : 1);
+                    ctx.save();
+                    ctx.translate(centerX, centerY);
+                    ctx.rotate(obj.rotation * Math.PI / 180);
 
-                    // Clip outer rounded rect
+                    // Clip to the borderRect (rounded corners) before drawing image + shadow
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowBlur = 0;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+
                     ctx.save();
                     ctx.beginPath();
-                    drawRoundedRect(ctx, -w / 2, -h / 2, w, h, cornerRadius);
+                    drawRoundedRect(ctx, borderRect.x, borderRect.y, borderRect.w, borderRect.h, borderRect.r);
                     ctx.clip();
 
-                    // Inner rect where the image actually draws (padding inside border)
-                    const innerW = w - innerPadding * 2;
-                    const innerH = h - innerPadding * 2;
-                    const innerX = -innerW / 2;
-                    const innerY = -innerH / 2;
+                    // Shadow only on the image pixels
+                    if (style.shadowSize > 0 && style.shadowOpacity > 0)
+                    {
+                        ctx.shadowColor = toRgba(style.shadowColor || '#000000', style.shadowOpacity);
+                        ctx.shadowBlur = style.shadowSize * 2 * resScale * scale;
+                        ctx.shadowOffsetX = 0;
+                        ctx.shadowOffsetY = 0;
+                    }
+                    else
+                    {
+                        ctx.shadowColor = 'transparent';
+                        ctx.shadowBlur = 0;
+                        ctx.shadowOffsetX = 0;
+                        ctx.shadowOffsetY = 0;
+                    }
 
-                    ctx.drawImage(imgEl, innerX, innerY, innerW, innerH);
+                    // Image is drawn inside contentRect (shrunken by border + padding)
+                    if (contentRect.w > 0 && contentRect.h > 0)
+                    {
+                        ctx.drawImage(imgEl, contentRect.x, contentRect.y, contentRect.w, contentRect.h);
+                    }
+
                     ctx.restore();
 
-                    // Outline/border on outer box
-                    if (borderSize > 0)
+                    // Draw crisp border on borderRect (inside fixed overlay bounds, no shadow)
+                    if (borderPx > 0 && borderRect.w > 0 && borderRect.h > 0)
                     {
-                        ctx.save();
-                        ctx.strokeStyle = hexToRgbA(borderColor, borderOpacity);
-                        ctx.lineWidth = borderSize;
-                        ctx.beginPath();
-                        drawRoundedRect(ctx, -w / 2, -h / 2, w, h, cornerRadius);
-                        ctx.stroke();
-                        ctx.restore();
-                    }
-                }
+                        ctx.shadowColor = 'transparent';
+                        ctx.shadowBlur = 0;
+                        ctx.shadowOffsetX = 0;
+                        ctx.shadowOffsetY = 0;
 
-                ctx.restore();
+                        ctx.beginPath();
+                        drawRoundedRect(ctx, borderRect.x, borderRect.y, borderRect.w, borderRect.h, borderRect.r);
+                        ctx.strokeStyle = toRgba(
+                            style.borderColor || style.outlineColor || '#ffffff',
+                            style.borderOpacity != null
+                                ? style.borderOpacity
+                                : (style.outlineOpacity != null ? style.outlineOpacity : 1)
+                        );
+                        ctx.lineWidth = borderPx;
+                        ctx.stroke();
+                    }
+
+                    ctx.restore();
+                }
             });
         }
 
