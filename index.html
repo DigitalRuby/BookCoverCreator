@@ -659,19 +659,22 @@
             </div>
 
             <!-- Text Stroke / Image Outline (existing behavior) -->
-            <h3>Text Stroke / Image Outline</h3>
-            <div class="params-grid">
-                <div class="control-group">
-                    <label>Stroke Color</label>
-                    <input type="color" id="prop-outline-color" value="#000000">
-                </div>
-                <div class="control-group">
-                    <label>Stroke Size</label>
-                    <input type="number" id="prop-outline-size" step="0.5" min="0">
-                </div>
-                <div class="control-group full">
-                    <label>Stroke Opacity</label>
-                    <input type="range" id="prop-outline-opacity" min="0" max="1" step="0.1">
+            <!-- Wrapped so it can be hidden for images -->
+            <div id="group-outline">
+                <h3>Text Stroke / Image Outline</h3>
+                <div class="params-grid">
+                    <div class="control-group">
+                        <label>Stroke Color</label>
+                        <input type="color" id="prop-outline-color" value="#000000">
+                    </div>
+                    <div class="control-group">
+                        <label>Stroke Size</label>
+                        <input type="number" id="prop-outline-size" step="0.5" min="0">
+                    </div>
+                    <div class="control-group full">
+                        <label>Stroke Opacity</label>
+                        <input type="range" id="prop-outline-opacity" min="0" max="1" step="0.1">
+                    </div>
                 </div>
             </div>
 
@@ -835,7 +838,8 @@
             propBgColor2: document.getElementById('prop-bg-color2'),
             propBgDir: document.getElementById('prop-bg-direction'),
             groupBorder: document.getElementById('group-border'),
-            groupTextBg: document.getElementById('group-text-bg')
+            groupTextBg: document.getElementById('group-text-bg'),
+            groupOutline: document.getElementById('group-outline')
         };
 
         // Init UI Inputs
@@ -1041,9 +1045,12 @@
         function addImageOverlay(src)
         {
             const obj = createOverlayObject('image', src);
-            // For images, boundsWidthPct / boundsHeightPct are not used
-            obj.boundsWidthPct = null;
-            obj.boundsHeightPct = null;
+
+            // Give images a fixed width in % so they behave like text boxes when dragging.
+            // Height will stay auto (aspect ratio preserved).
+            obj.boundsWidthPct = 30;     // default 30% width of the wrapper
+            obj.boundsHeightPct = null;  // let height be auto
+
             overlays.push(obj);
             renderDomOverlays();
             selectOverlay(obj.id);
@@ -1101,6 +1108,12 @@
             // Show background & border groups appropriately
             dom.groupTextBg.style.display = isText ? 'grid' : 'none';
             dom.groupBorder.style.display = 'grid'; // useful for both text and image overlays
+
+            // NEW: hide stroke/outline controls for images
+            if (dom.groupOutline)
+            {
+                dom.groupOutline.style.display = isText ? 'block' : 'none';
+            }
 
             // Highlight DOM
             document.querySelectorAll('.overlay-item').forEach(el => el.classList.remove('selected'));
@@ -1357,8 +1370,8 @@
             el.style.left = obj.x + '%';
             el.style.top = obj.y + '%';
 
-            // Bounds width/height for text box
-            if (obj.type === 'text' && obj.boundsWidthPct)
+            // Bounds width/height for overlay
+            if (obj.boundsWidthPct)
             {
                 el.style.width = obj.boundsWidthPct + '%';
             } else
@@ -1366,7 +1379,7 @@
                 el.style.width = 'auto';
             }
 
-            if (obj.type === 'text' && obj.boundsHeightPct)
+            if (obj.boundsHeightPct)
             {
                 el.style.height = obj.boundsHeightPct + '%';
             } else
@@ -1491,8 +1504,10 @@
 
         // --- DRAG & RESIZE LOGIC ---
         let isDragging = false;
-        let dragOffset = { x: 0, y: 0 };
         let activeDragId = null;
+        // NEW: drag uses mouse deltas instead of rect offsets
+        let dragStartMouse = { x: 0, y: 0 };
+        let dragStartObjPos = { x: 0, y: 0 };
 
         let isResizing = false;
         let resizeData = null;
@@ -1506,10 +1521,14 @@
             activeDragId = id;
             selectOverlay(id);
 
-            const el = document.getElementById('ov-' + id);
-            const rect = el.getBoundingClientRect();
-            dragOffset.x = e.clientX - rect.left;
-            dragOffset.y = e.clientY - rect.top;
+            const obj = overlays.find(o => o.id === id);
+            if (!obj) return;
+
+            // Record starting mouse position and object position (in %)
+            dragStartMouse.x = e.clientX;
+            dragStartMouse.y = e.clientY;
+            dragStartObjPos.x = obj.x;
+            dragStartObjPos.y = obj.y;
 
             e.stopPropagation();
         }
@@ -1531,13 +1550,18 @@
         {
             if (isDragging && activeDragId)
             {
-                const wrapperRect = dom.canvasWrapper.getBoundingClientRect();
-                const x = e.clientX - wrapperRect.left - dragOffset.x;
-                const y = e.clientY - wrapperRect.top - dragOffset.y;
-
                 const obj = overlays.find(o => o.id === activeDragId);
-                obj.x = (x / wrapperRect.width) * 100;
-                obj.y = (y / wrapperRect.height) * 100;
+                if (!obj) return;
+
+                const wrapperRect = dom.canvasWrapper.getBoundingClientRect();
+                const dx = e.clientX - dragStartMouse.x;
+                const dy = e.clientY - dragStartMouse.y;
+
+                const dxPct = (dx / wrapperRect.width) * 100;
+                const dyPct = (dy / wrapperRect.height) * 100;
+
+                obj.x = dragStartObjPos.x + dxPct;
+                obj.y = dragStartObjPos.y + dyPct;
 
                 updateDomOverlayStyle(obj);
             }
@@ -1751,7 +1775,6 @@
 
                 let centerX, centerY;
                 let boxW = null, boxH = null;
-                let domRect = null;
 
                 if (obj.type === 'text' && obj.boundsWidthPct && obj.boundsHeightPct)
                 {
@@ -1762,7 +1785,6 @@
                 } else
                 {
                     const rect = el.getBoundingClientRect();
-                    domRect = rect;
                     centerX = ((rect.left + rect.width / 2) - wrapperRect.left) / wrapperRect.width * width;
                     centerY = ((rect.top + rect.height / 2) - wrapperRect.top) / wrapperRect.height * height;
 
@@ -1962,10 +1984,9 @@
                         return;
                     }
 
-                    // Use the actual displayed size of the image in the DOM
-                    const rect = domRect || el.getBoundingClientRect();
-                    const w = (rect.width / wrapperRect.width) * width;
-                    const h = (rect.height / wrapperRect.height) * height;
+                    const baseW = 300 * resScale;
+                    const w = baseW * obj.scale;
+                    const h = (imgEl.naturalHeight / imgEl.naturalWidth) * w;
                     const cornerRadius = (s.cornerRadius || 0) * resScale;
 
                     const maxPadding = Math.min(w / 2, h / 2);
