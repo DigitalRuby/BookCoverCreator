@@ -372,7 +372,7 @@ $dom.pAlpha.on('input', function ()
 $('#frontOffset, #backOffset').on('input', function ()
 {
     const isFront = $(this).attr('id') === 'frontOffset';
-    const val = parseInt($(this).val());
+    const val = parseFloat($(this).val());
     window.state.params[isFront ? 'frontOffset' : 'backOffset'] = val;
     $('#lbl-' + (isFront ? 'frontOffset' : 'backOffset')).text(val + "%");
     saveState();
