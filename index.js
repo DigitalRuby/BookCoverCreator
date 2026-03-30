@@ -3,6 +3,7 @@
 // --- Constants ---
 const DPI = 300;
 const RENDER_DELAY_MS = 600;
+const MAX_BITMAP_DIM = 4000;
 
 // --- State (Global) ---
 const defaultParams = {
@@ -23,11 +24,13 @@ window.selectedOverlayId = null;
 window.state = {
     params: window.params,
     isCustomTemplate: false,
-    images: { template: null, front: null, back: null, spine: null }
+    images: { template: null, front: null, back: null, spine: null },
+    bitmaps: { template: null, front: null, back: null, spine: null }
 };
 
 // --- CACHE & DOM ---
 let spineCacheCanvas = document.createElement('canvas');
+let offCanvas = document.createElement('canvas');
 let isSpineCacheDirty = true;
 
 const $dom = {
@@ -383,7 +386,8 @@ $('#frontOffset, #backOffset').on('input', function ()
     window.state.params[isFront ? 'frontOffset' : 'backOffset'] = val;
     $('#lbl-' + (isFront ? 'frontOffset' : 'backOffset')).text(val + "%");
     saveState();
-    scheduleUpdate(() => window.requestRender(), false);
+    if (window._sliderRaf) cancelAnimationFrame(window._sliderRaf);
+    window._sliderRaf = requestAnimationFrame(() => window.requestRender());
 });
 
 $('#frontZoom, #backZoom').on('input', function ()
@@ -393,11 +397,36 @@ $('#frontZoom, #backZoom').on('input', function ()
     window.state.params[isFront ? 'frontZoom' : 'backZoom'] = val;
     $('#lbl-' + (isFront ? 'frontZoom' : 'backZoom')).text(val + "%");
     saveState();
-    scheduleUpdate(() => window.requestRender(), false);
+    if (window._sliderRaf) cancelAnimationFrame(window._sliderRaf);
+    window._sliderRaf = requestAnimationFrame(() => window.requestRender());
 });
 
 // --- File Handlers ---
 window.triggerFile = function (id) { $('#' + id).click(); };
+
+function createScaledBitmap(img, key, callback)
+{
+    const scale = Math.min(1, MAX_BITMAP_DIM / Math.max(img.width, img.height));
+    const w = Math.round(img.width * scale);
+    const h = Math.round(img.height * scale);
+    if (typeof createImageBitmap !== 'function')
+    {
+        window.state.bitmaps[key] = img;
+        if (callback) callback();
+        return;
+    }
+    createImageBitmap(img, { resizeWidth: w, resizeHeight: h, resizeQuality: 'high' }).then(bitmap =>
+    {
+        const old = window.state.bitmaps[key];
+        if (old && typeof old.close === 'function') old.close();
+        window.state.bitmaps[key] = bitmap;
+        if (callback) callback();
+    }).catch(() =>
+    {
+        window.state.bitmaps[key] = img;
+        if (callback) callback();
+    });
+}
 
 function setupImageHandler(zoneId, fileInputId, imageKey, infoId)
 {
@@ -422,7 +451,7 @@ function setupImageHandler(zoneId, fileInputId, imageKey, infoId)
                     if (imageKey === 'spine') isSpineCacheDirty = true;
                     $zone.addClass('has-image');
                     updateLabels();
-                    window.requestRender();
+                    createScaledBitmap(img, imageKey, () => window.requestRender());
                 };
                 img.src = e.target.result;
             };
@@ -912,15 +941,19 @@ function renderToCanvas(targetCanvas, isExport)
     const ctx = targetCanvas.getContext('2d');
     ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
 
-    if (!isExport && window.state.images.template)
+    const templateSrc = window.state.bitmaps.template || window.state.images.template;
+    if (!isExport && templateSrc)
     {
-        ctx.drawImage(window.state.images.template, 0, 0, geo.final.w, geo.final.h);
+        ctx.drawImage(templateSrc, 0, 0, geo.final.w, geo.final.h);
     }
 
-    const offCanvas = document.createElement('canvas');
-    offCanvas.width = geo.final.w; offCanvas.height = geo.final.h;
+    if (offCanvas.width !== geo.final.w || offCanvas.height !== geo.final.h)
+    {
+        offCanvas.width = geo.final.w; offCanvas.height = geo.final.h;
+    }
     const oCtx = offCanvas.getContext('2d');
-    drawCompositeLayer(oCtx, geo);
+    oCtx.clearRect(0, 0, offCanvas.width, offCanvas.height);
+    drawCompositeLayer(oCtx, geo, isExport);
 
     ctx.save();
     if (!isExport) ctx.globalAlpha = window.state.params.previewAlpha;
@@ -1025,16 +1058,17 @@ function renderOverlaysToContext(ctx, canvasW, canvasH)
     });
 }
 
-function drawCompositeLayer(ctx, geo)
+function drawCompositeLayer(ctx, geo, isExport)
 {
-    if (window.state.images.back) drawImageCover(ctx, window.state.images.back, geo.back, window.state.params.backOffset, window.state.params.backZoom ?? 100);
+    const src = isExport ? window.state.images : window.state.bitmaps;
+    if (src.back) drawImageCover(ctx, src.back, geo.back, window.state.params.backOffset, window.state.params.backZoom ?? 100);
     else drawPlaceholder(ctx, geo.back, "");
 
-    if (window.state.images.front) drawImageCover(ctx, window.state.images.front, geo.front, window.state.params.frontOffset, window.state.params.frontZoom ?? 100);
+    if (src.front) drawImageCover(ctx, src.front, geo.front, window.state.params.frontOffset, window.state.params.frontZoom ?? 100);
     else drawPlaceholder(ctx, geo.front, "");
 
-    if (window.state.images.back) processAutoBleed(ctx, window.state.images.back, geo.back, geo.blendLeft, true, window.state.params.backOffset, window.state.params.backZoom ?? 100);
-    if (window.state.images.front) processAutoBleed(ctx, window.state.images.front, geo.front, geo.blendRight, false, window.state.params.frontOffset, window.state.params.frontZoom ?? 100);
+    if (src.back) processAutoBleed(ctx, src.back, geo.back, geo.blendLeft, true, window.state.params.backOffset, window.state.params.backZoom ?? 100);
+    if (src.front) processAutoBleed(ctx, src.front, geo.front, geo.blendRight, false, window.state.params.frontOffset, window.state.params.frontZoom ?? 100);
 
     if (window.state.images.spine) ctx.drawImage(spineCacheCanvas, geo.spine.x, geo.spine.y);
     else { ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 1; ctx.strokeRect(geo.spine.x, geo.spine.y, geo.spine.w, geo.spine.h); }
@@ -1048,7 +1082,7 @@ function updateSpineCache(destRect)
     }
     const sCtx = spineCacheCanvas.getContext('2d');
     sCtx.clearRect(0, 0, destRect.w, destRect.h);
-    const img = window.state.images.spine;
+    const img = window.state.bitmaps.spine || window.state.images.spine;
     if (!img) return;
 
     const trimmedY = scanForBlackRows(img);
@@ -1229,7 +1263,7 @@ function generateDefaultTemplate()
         window.state.images.template = img;
         $('#dz-template').addClass('has-image');
         updateLabels();
-        window.requestRender();
+        createScaledBitmap(img, 'template', () => window.requestRender());
     };
     img.src = tCvs.toDataURL('image/webp', 0.5);
 }
