@@ -1,21 +1,24 @@
 /* global jQuery, $ */
 
 // --- Constants ---
-const DPI = 300;
 const RENDER_DELAY_MS = 600;
 const MAX_BITMAP_DIM = 4000;
+
+function getDPI() { return window.state ? (window.state.params.dpi || 300) : 300; }
 
 // --- State (Global) ---
 const defaultParams = {
     width: 4065, height: 2775, spineWidth: 390,
     alphaMult: 2.0, alphaPower: 1.0, previewAlpha: 0.75,
     frontOffset: 0, backOffset: 0,
-    frontZoom: 100, backZoom: 100
+    frontZoom: 100, backZoom: 100,
+    dpi: 300
 };
 
 let savedParams = localStorage.getItem('coverParams');
 window.params = savedParams ? JSON.parse(savedParams) : $.extend({}, defaultParams);
 if (typeof window.params.previewAlpha === 'undefined') window.params.previewAlpha = 0.75;
+if (typeof window.params.dpi === 'undefined') window.params.dpi = 300;
 
 // Overlays array
 window.overlays = [];
@@ -37,6 +40,7 @@ const $dom = {
     width: $('#finalWidth'),
     height: $('#finalHeight'),
     spineW: $('#spineWidth'),
+    dpi: $('#dpi'),
     aMult: $('#spineAlphaMultiplier'),
     aPower: $('#spineAlphaPower'),
     pAlpha: $('#previewAlpha'),
@@ -83,9 +87,10 @@ const propMap = {
 // --- Initialization ---
 function initUI()
 {
-    $dom.width.val((window.state.params.width / DPI).toFixed(2));
-    $dom.height.val((window.state.params.height / DPI).toFixed(2));
-    $dom.spineW.val((window.state.params.spineWidth / DPI).toFixed(2));
+    $dom.width.val((window.state.params.width / getDPI()).toFixed(2));
+    $dom.height.val((window.state.params.height / getDPI()).toFixed(2));
+    $dom.spineW.val((window.state.params.spineWidth / getDPI()).toFixed(2));
+    $dom.dpi.val(window.state.params.dpi || 300);
     $dom.aMult.val(window.state.params.alphaMult);
     $dom.aPower.val(window.state.params.alphaPower);
     $dom.pAlpha.val(window.state.params.previewAlpha);
@@ -351,7 +356,7 @@ $('#finalWidth, #finalHeight, #spineWidth').on('input', function ()
     if (isNaN(val)) return;
     const id = $(this).attr('id');
     const key = id === 'spineWidth' ? 'spineWidth' : (id === 'finalWidth' ? 'width' : 'height');
-    window.state.params[key] = Math.round(val * DPI);
+    window.state.params[key] = Math.round(val * getDPI());
     saveState();
     isSpineCacheDirty = true;
     scheduleUpdate(() =>
@@ -369,6 +374,24 @@ $('#spineAlphaMultiplier, #spineAlphaPower').on('input', function ()
     saveState();
     isSpineCacheDirty = true;
     scheduleUpdate(() => window.requestRender(), true);
+});
+
+$('#dpi').on('input', function ()
+{
+    const val = parseInt($(this).val());
+    if (isNaN(val) || val < 72) return;
+    window.state.params.dpi = val;
+    $dom.width.val((window.state.params.width / val).toFixed(2));
+    $dom.height.val((window.state.params.height / val).toFixed(2));
+    $dom.spineW.val((window.state.params.spineWidth / val).toFixed(2));
+    saveState();
+    isSpineCacheDirty = true;
+    scheduleUpdate(() =>
+    {
+        updateLabels();
+        if (!window.state.isCustomTemplate) generateDefaultTemplate();
+        else window.requestRender();
+    }, true);
 });
 
 $dom.pAlpha.on('input', function ()
@@ -1253,7 +1276,7 @@ function generateDefaultTemplate()
     tCtx.fillText("Barcode Area", backW - barW / 2 - (bleed * 4), H - barH / 2 - (bleed * 4));
     tCtx.font = "bold 40px Arial";
     tCtx.save(); tCtx.translate(spineX + SW / 2, H / 2); tCtx.rotate(-Math.PI / 2);
-    tCtx.fillText(`${(SW / DPI).toFixed(2)} in Spine`, 0, -10);
+    tCtx.fillText(`${(SW / getDPI()).toFixed(2)} in Spine`, 0, -10);
     tCtx.restore();
     tCtx.fillText("Back Cover", backW / 2, H / 2); tCtx.fillText("Front Cover", W - (backW / 2), H / 2);
 
