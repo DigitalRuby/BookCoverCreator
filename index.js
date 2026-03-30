@@ -8,7 +8,8 @@ const RENDER_DELAY_MS = 600;
 const defaultParams = {
     width: 4065, height: 2775, spineWidth: 390,
     alphaMult: 2.0, alphaPower: 1.0, previewAlpha: 0.75,
-    frontOffset: 0, backOffset: 0
+    frontOffset: 0, backOffset: 0,
+    frontZoom: 100, backZoom: 100
 };
 
 let savedParams = localStorage.getItem('coverParams');
@@ -42,6 +43,8 @@ const $dom = {
     spinner: $('#render-spinner'),
     frontOff: $('#frontOffset'),
     backOff: $('#backOffset'),
+    frontZoom: $('#frontZoom'),
+    backZoom: $('#backZoom'),
     mainArea: $('#main-area'),
     panelLayout: $('#panel-layout'),
     panelOverlay: $('#panel-overlay'),
@@ -88,6 +91,10 @@ function initUI()
     $dom.backOff.val(window.state.params.backOffset);
     $('#lbl-frontOffset').text(window.state.params.frontOffset + "%");
     $('#lbl-backOffset').text(window.state.params.backOffset + "%");
+    $dom.frontZoom.val(window.state.params.frontZoom ?? 100);
+    $dom.backZoom.val(window.state.params.backZoom ?? 100);
+    $('#lbl-frontZoom').text((window.state.params.frontZoom ?? 100) + "%");
+    $('#lbl-backZoom').text((window.state.params.backZoom ?? 100) + "%");
 }
 initUI();
 
@@ -375,6 +382,16 @@ $('#frontOffset, #backOffset').on('input', function ()
     const val = parseFloat($(this).val());
     window.state.params[isFront ? 'frontOffset' : 'backOffset'] = val;
     $('#lbl-' + (isFront ? 'frontOffset' : 'backOffset')).text(val + "%");
+    saveState();
+    scheduleUpdate(() => window.requestRender(), false);
+});
+
+$('#frontZoom, #backZoom').on('input', function ()
+{
+    const isFront = $(this).attr('id') === 'frontZoom';
+    const val = parseFloat($(this).val());
+    window.state.params[isFront ? 'frontZoom' : 'backZoom'] = val;
+    $('#lbl-' + (isFront ? 'frontZoom' : 'backZoom')).text(val + "%");
     saveState();
     scheduleUpdate(() => window.requestRender(), false);
 });
@@ -1010,14 +1027,14 @@ function renderOverlaysToContext(ctx, canvasW, canvasH)
 
 function drawCompositeLayer(ctx, geo)
 {
-    if (window.state.images.back) drawImageCover(ctx, window.state.images.back, geo.back, window.state.params.backOffset);
+    if (window.state.images.back) drawImageCover(ctx, window.state.images.back, geo.back, window.state.params.backOffset, window.state.params.backZoom ?? 100);
     else drawPlaceholder(ctx, geo.back, "");
 
-    if (window.state.images.front) drawImageCover(ctx, window.state.images.front, geo.front, window.state.params.frontOffset);
+    if (window.state.images.front) drawImageCover(ctx, window.state.images.front, geo.front, window.state.params.frontOffset, window.state.params.frontZoom ?? 100);
     else drawPlaceholder(ctx, geo.front, "");
 
-    if (window.state.images.back) processAutoBleed(ctx, window.state.images.back, geo.back, geo.blendLeft, true, window.state.params.backOffset);
-    if (window.state.images.front) processAutoBleed(ctx, window.state.images.front, geo.front, geo.blendRight, false, window.state.params.frontOffset);
+    if (window.state.images.back) processAutoBleed(ctx, window.state.images.back, geo.back, geo.blendLeft, true, window.state.params.backOffset, window.state.params.backZoom ?? 100);
+    if (window.state.images.front) processAutoBleed(ctx, window.state.images.front, geo.front, geo.blendRight, false, window.state.params.frontOffset, window.state.params.frontZoom ?? 100);
 
     if (window.state.images.spine) ctx.drawImage(spineCacheCanvas, geo.spine.x, geo.spine.y);
     else { ctx.strokeStyle = "rgba(255,255,255,0.2)"; ctx.lineWidth = 1; ctx.strokeRect(geo.spine.x, geo.spine.y, geo.spine.w, geo.spine.h); }
@@ -1063,13 +1080,17 @@ function updateSpineCache(destRect)
     sCtx.putImageData(imgData, 0, 0);
 }
 
-function getCropCoords(imgW, imgH, targetW, targetH, offsetPct)
+function getCropCoords(imgW, imgH, targetW, targetH, offsetPct, zoom)
 {
+    const zoomFactor = 100 / (zoom || 100);
     const targetAspect = targetW / targetH;
     const imgAspect = imgW / imgH;
     let cropW, cropH;
     if (targetAspect > imgAspect) { cropW = imgW; cropH = Math.floor(imgW / targetAspect); }
     else { cropH = imgH; cropW = Math.floor(imgH * targetAspect); }
+
+    cropW = Math.floor(cropW * zoomFactor);
+    cropH = Math.floor(cropH * zoomFactor);
 
     let x = (imgW - cropW) / 2;
     if (offsetPct && offsetPct !== 0 && cropW < imgW)
@@ -1080,15 +1101,15 @@ function getCropCoords(imgW, imgH, targetW, targetH, offsetPct)
     return { x: Math.floor(x), y: Math.floor((imgH - cropH) / 2), w: cropW, h: cropH };
 }
 
-function drawImageCover(ctx, img, rect, offset)
+function drawImageCover(ctx, img, rect, offset, zoom)
 {
-    const crop = getCropCoords(img.width, img.height, rect.w, rect.h, offset);
+    const crop = getCropCoords(img.width, img.height, rect.w, rect.h, offset, zoom);
     ctx.drawImage(img, crop.x, crop.y, crop.w, crop.h, rect.x, rect.y, rect.w, rect.h);
 }
 
-function processAutoBleed(ctx, img, sourceRect, destRect, isBackCover, offset)
+function processAutoBleed(ctx, img, sourceRect, destRect, isBackCover, offset, zoom)
 {
-    const crop = getCropCoords(img.width, img.height, sourceRect.w, sourceRect.h, offset);
+    const crop = getCropCoords(img.width, img.height, sourceRect.w, sourceRect.h, offset, zoom);
     const widthRatio = sourceRect.w / crop.w;
     const neededSourceW = Math.floor(destRect.w / widthRatio);
     const availableGap = isBackCover ? (img.width - (crop.x + crop.w)) : crop.x;

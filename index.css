@@ -288,6 +288,18 @@ h3
     margin-bottom: 2px;
 }
 
+.slider-row
+{
+    display: flex;
+    gap: 8px;
+}
+
+.slider-row > div
+{
+    flex: 1;
+    min-width: 0;
+}
+
 /* --- Right Main Area --- */
 .main-area
 {

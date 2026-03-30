@@ -59,8 +59,16 @@
                     <div class="info-block" id="info-back"></div>
                 </div>
                 <div class="offset-control">
-                    <div class="offset-label"><span>Offset</span><span id="lbl-backOffset">0%</span></div>
-                    <input type="range" id="backOffset" min="-25" max="25" step="0.5" value="0">
+                    <div class="slider-row">
+                        <div>
+                            <div class="offset-label"><span>Offset</span><span id="lbl-backOffset">0%</span></div>
+                            <input type="range" id="backOffset" min="-25" max="25" step="0.5" value="0">
+                        </div>
+                        <div>
+                            <div class="offset-label"><span>Zoom</span><span id="lbl-backZoom">100%</span></div>
+                            <input type="range" id="backZoom" min="100" max="200" step="0.5" value="100">
+                        </div>
+                    </div>
                 </div>
                 <div class="drop-zone zone-medium" id="dz-spine" onclick="triggerFile('file-spine')">
                     <p>Spine</p>
@@ -71,8 +79,16 @@
                     <div class="info-block" id="info-front"></div>
                 </div>
                 <div class="offset-control">
-                    <div class="offset-label"><span>Offset</span><span id="lbl-frontOffset">0%</span></div>
-                    <input type="range" id="frontOffset" min="-25" max="25" step="0.5" value="0">
+                    <div class="slider-row">
+                        <div>
+                            <div class="offset-label"><span>Offset</span><span id="lbl-frontOffset">0%</span></div>
+                            <input type="range" id="frontOffset" min="-25" max="25" step="0.5" value="0">
+                        </div>
+                        <div>
+                            <div class="offset-label"><span>Zoom</span><span id="lbl-frontZoom">100%</span></div>
+                            <input type="range" id="frontZoom" min="100" max="200" step="0.5" value="100">
+                        </div>
+                    </div>
                 </div>
             </div>
 
