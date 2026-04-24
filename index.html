@@ -15,9 +15,12 @@
     <input type="file" id="file-overlay-img" hidden accept="image/*">
 
     <div class="sidebar">
-        <div style="display:flex; align-items:center; justify-content:space-between;">
+        <div class="sidebar-header">
             <h2>Cover Creator</h2>
-            <div id="render-spinner" class="loader"></div>
+            <div class="sidebar-header-right">
+                <span id="outputDimensions" class="output-dimensions">0 x 0 px</span>
+                <div id="render-spinner" class="loader"></div>
+            </div>
         </div>
 
         <div id="panel-layout" class="sidebar-section active">

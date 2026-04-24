@@ -41,6 +41,27 @@ body
     z-index: 10;
 }
 
+.sidebar-header
+{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sidebar-header-right
+{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.output-dimensions
+{
+    font-size: 0.72rem;
+    color: #9ecbff;
+    white-space: nowrap;
+}
+
 h2
 {
     margin: 0;

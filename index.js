@@ -45,6 +45,7 @@ const $dom = {
     aPower: $('#spineAlphaPower'),
     pAlpha: $('#previewAlpha'),
     pAlphaVal: $('#opacityVal'),
+    outputDimensions: $('#outputDimensions'),
     canvas: $('#previewCanvas'),
     canvasWrapper: $('#canvas-wrapper'),
     spinner: $('#render-spinner'),
@@ -380,10 +381,21 @@ $('#dpi').on('input', function ()
 {
     const val = parseInt($(this).val());
     if (isNaN(val) || val < 72) return;
+
+    const oldDpi = getDPI();
+    const widthIn = window.state.params.width / oldDpi;
+    const heightIn = window.state.params.height / oldDpi;
+    const spineIn = window.state.params.spineWidth / oldDpi;
+
     window.state.params.dpi = val;
-    $dom.width.val((window.state.params.width / val).toFixed(2));
-    $dom.height.val((window.state.params.height / val).toFixed(2));
-    $dom.spineW.val((window.state.params.spineWidth / val).toFixed(2));
+    window.state.params.width = Math.round(widthIn * val);
+    window.state.params.height = Math.round(heightIn * val);
+    window.state.params.spineWidth = Math.round(spineIn * val);
+
+    $dom.width.val(widthIn.toFixed(2));
+    $dom.height.val(heightIn.toFixed(2));
+    $dom.spineW.val(spineIn.toFixed(2));
+
     saveState();
     isSpineCacheDirty = true;
     scheduleUpdate(() =>
@@ -1219,6 +1231,7 @@ function drawPlaceholder(ctx, rect, text)
 function updateLabels()
 {
     const geo = calculateGeometry();
+    $dom.outputDimensions.text(`${window.state.params.width} x ${window.state.params.height} px`);
     const setLabel = (id, key, r) =>
     {
         const img = window.state.images[key];
@@ -1274,9 +1287,10 @@ function generateDefaultTemplate()
 
     tCtx.fillStyle = "black"; tCtx.font = "bold 30px Arial"; tCtx.textAlign = "center";
     tCtx.fillText("Barcode Area", backW - barW / 2 - (bleed * 4), H - barH / 2 - (bleed * 4));
-    tCtx.font = "bold 40px Arial";
+    const dpiScale = getDPI() / 300;
+    tCtx.font = `bold ${Math.round(40 * dpiScale)}px Arial`;
     tCtx.save(); tCtx.translate(spineX + SW / 2, H / 2); tCtx.rotate(-Math.PI / 2);
-    tCtx.fillText(`${(SW / getDPI()).toFixed(2)} in Spine`, 0, -10);
+    tCtx.fillText(`${(SW / getDPI()).toFixed(2)} in Spine`, 0, Math.round(-10 * dpiScale));
     tCtx.restore();
     tCtx.fillText("Back Cover", backW / 2, H / 2); tCtx.fillText("Front Cover", W - (backW / 2), H / 2);
 
